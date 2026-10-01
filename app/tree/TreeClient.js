@@ -1,1022 +1,831 @@
-"use client";
-
-import { useEffect, useMemo, useRef, useState } from "react";
-
-function getFullName(person) {
-  return [
-    person?.first_name,
-    person?.middle_name,
-    person?.last_name,
-  ]
-    .filter(Boolean)
-    .join(" ");
+.tree-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #f7f5f1;
+  color: #191919;
 }
 
-function calculateAge(birthDate, deathDate) {
-  if (!birthDate) {
-    return null;
-  }
+/* =========================================================
+   HEADER
+========================================================= */
 
-  const birth = new Date(`${birthDate}T00:00:00`);
-
-  if (Number.isNaN(birth.getTime())) {
-    return null;
-  }
-
-  const end = deathDate
-    ? new Date(`${deathDate}T00:00:00`)
-    : new Date();
-
-  if (Number.isNaN(end.getTime())) {
-    return null;
-  }
-
-  let age = end.getFullYear() - birth.getFullYear();
-
-  const monthDifference =
-    end.getMonth() - birth.getMonth();
-
-  if (
-    monthDifference < 0 ||
-    (monthDifference === 0 &&
-      end.getDate() < birth.getDate())
-  ) {
-    age--;
-  }
-
-  return Math.max(age, 0);
+.tree-header {
+  position: relative;
+  z-index: 20;
+  height: 86px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 25px;
+  padding: 0 30px;
+  border-bottom: 1px solid #e5e0d8;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(14px);
 }
 
-function formatDate(date) {
-  if (!date) {
-    return null;
-  }
-
-  const parsed = new Date(`${date}T00:00:00`);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed.toLocaleDateString("ar-SA", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+.tree-header-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
-function buildGraph(people, relationships) {
-  const peopleMap = new Map(
-    people.map((person) => [person.id, person])
-  );
+.tree-back {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2ddd5;
+  border-radius: 12px;
+  background: #fff;
+  color: #555;
+  font-size: 20px;
+  transition: 0.18s ease;
+}
 
-  const parents = new Map();
-  const children = new Map();
-  const spouses = new Map();
+.tree-back:hover {
+  background: #f4f0e9;
+  color: #222;
+}
 
-  people.forEach((person) => {
-    parents.set(person.id, new Set());
-    children.set(person.id, new Set());
-    spouses.set(person.id, new Set());
-  });
+.tree-header-title span {
+  display: block;
+  margin-bottom: 3px;
+  color: #a58a67;
+  font-size: 10px;
+  font-weight: 800;
+}
 
-  relationships.forEach((relationship) => {
-    const a = relationship.person_id;
-    const b = relationship.related_person_id;
+.tree-header-title h1 {
+  margin: 0;
+  font-size: 22px;
+}
 
-    if (!peopleMap.has(a) || !peopleMap.has(b)) {
-      return;
-    }
+.tree-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
-    if (
-      relationship.relationship_type === "father" ||
-      relationship.relationship_type === "mother"
-    ) {
-      parents.get(a)?.add(b);
-      children.get(b)?.add(a);
-    }
+/* =========================================================
+   SEARCH
+========================================================= */
 
-    if (relationship.relationship_type === "child") {
-      children.get(a)?.add(b);
-      parents.get(b)?.add(a);
-    }
+.tree-search {
+  position: relative;
+  width: 270px;
+}
 
-    if (relationship.relationship_type === "spouse") {
-      spouses.get(a)?.add(b);
-      spouses.get(b)?.add(a);
-    }
-  });
+.tree-search > span {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  z-index: 2;
+  transform: translateY(-50%);
+  color: #999;
+  font-size: 19px;
+}
+
+.tree-search input {
+  width: 100%;
+  height: 43px;
+  padding: 0 42px 0 14px;
+  border: 1px solid #e1dcd4;
+  border-radius: 13px;
+  outline: none;
+  background: #fff;
+  color: #222;
+  font-size: 12px;
+}
+
+.tree-search input:focus {
+  border-color: #bca98e;
+  box-shadow: 0 0 0 3px rgba(188, 169, 142, 0.1);
+}
+
+.search-results {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  left: 0;
+  z-index: 100;
+  overflow: hidden;
+  border: 1px solid #e5e0d8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 15px 40px rgba(20, 20, 20, 0.12);
+}
+
+.search-results button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 53px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid #f0ece6;
+  background: #fff;
+  color: #333;
+  font-size: 12px;
+  text-align: right;
+}
+
+.search-results button:last-child {
+  border-bottom: 0;
+}
+
+.search-results button:hover {
+  background: #faf8f4;
+}
+
+.search-avatar {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #efe6d9;
+  color: #765d3c;
+  font-weight: 800;
+}
+
+.tree-dashboard-link {
+  height: 43px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-radius: 13px;
+  background: #191919;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   TOOLBAR
+========================================================= */
+
+.tree-toolbar {
+  position: absolute;
+  z-index: 15;
+  top: 103px;
+  right: 30px;
+  left: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.tree-info,
+.tree-controls {
+  pointer-events: auto;
+}
+
+.tree-info {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 13px;
+  border: 1px solid #e3ded6;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #999;
+  font-size: 10px;
+  box-shadow: 0 5px 20px rgba(30, 25, 18, 0.04);
+  backdrop-filter: blur(10px);
+}
+
+.tree-info strong {
+  color: #222;
+  font-size: 13px;
+}
+
+.tree-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #e3ded6;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 5px 20px rgba(30, 25, 18, 0.04);
+  backdrop-filter: blur(10px);
+}
+
+.tree-controls button {
+  min-width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #444;
+  font-size: 18px;
+}
+
+.tree-controls button:hover {
+  background: #f4f0e9;
+}
+
+.tree-controls > span {
+  min-width: 46px;
+  color: #888;
+  font-size: 10px;
+  text-align: center;
+  direction: ltr;
+}
+
+.tree-controls .reset-button {
+  margin-right: 4px;
+  padding: 0 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   VIEWPORT
+========================================================= */
+
+.tree-viewport {
+  position: absolute;
+  top: 86px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background:
+    radial-gradient(
+      circle at 50% 40%,
+      rgba(205, 189, 165, 0.13),
+      transparent 35%
+    ),
+    #f7f5f1;
+}
+
+.tree-viewport:active {
+  cursor: grabbing;
+}
+
+.tree-viewport::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(
+      rgba(120, 105, 85, 0.045) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(120, 105, 85, 0.045) 1px,
+      transparent 1px
+    );
+  background-size: 34px 34px;
+  pointer-events: none;
+}
+
+/* =========================================================
+   CANVAS
+========================================================= */
+
+.tree-canvas {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  width: 3000px;
+  height: 2200px;
+  transform-origin: top center;
 
   /*
-   * Determine generations.
-   *
-   * A person with no known parents starts at generation 0.
-   * Their children move one generation down.
+   * مهم:
+   * لا يوجد transition هنا.
+   * لأن canvas يتحرك مع pointer movement
+   * والـ transition هو سبب الإحساس بالتأخير
+   * والاهتزاز أثناء السحب.
    */
-  const generation = new Map();
-
-  function calculateGeneration(personId, visiting = new Set()) {
-    if (generation.has(personId)) {
-      return generation.get(personId);
-    }
-
-    if (visiting.has(personId)) {
-      return 0;
-    }
-
-    visiting.add(personId);
-
-    const personParents = [
-      ...(parents.get(personId) || []),
-    ];
-
-    if (!personParents.length) {
-      generation.set(personId, 0);
-      return 0;
-    }
-
-    const parentGenerations = personParents.map(
-      (parentId) =>
-        calculateGeneration(
-          parentId,
-          new Set(visiting)
-        )
-    );
-
-    const result =
-      Math.max(...parentGenerations) + 1;
-
-    generation.set(personId, result);
-
-    return result;
-  }
-
-  people.forEach((person) => {
-    calculateGeneration(person.id);
-  });
-
-  /*
-   * Keep spouses on the same generation.
-   */
-  let changed = true;
-
-  while (changed) {
-    changed = false;
-
-    people.forEach((person) => {
-      const current = generation.get(person.id) || 0;
-
-      for (const spouseId of spouses.get(person.id) || []) {
-        const spouseGeneration =
-          generation.get(spouseId) || 0;
-
-        if (current !== spouseGeneration) {
-          const target = Math.max(
-            current,
-            spouseGeneration
-          );
-
-          if (generation.get(person.id) !== target) {
-            generation.set(person.id, target);
-            changed = true;
-          }
-
-          if (
-            generation.get(spouseId) !== target
-          ) {
-            generation.set(spouseId, target);
-            changed = true;
-          }
-        }
-      }
-    });
-  }
-
-  const generationGroups = new Map();
-
-  people.forEach((person) => {
-    const level = generation.get(person.id) || 0;
-
-    if (!generationGroups.has(level)) {
-      generationGroups.set(level, []);
-    }
-
-    generationGroups.get(level).push(person);
-  });
-
-  const sortedGenerations = [
-    ...generationGroups.entries(),
-  ].sort((a, b) => a[0] - b[0]);
-
-  const nodes = [];
-
-  const NODE_WIDTH = 220;
-  const NODE_HEIGHT = 112;
-  const HORIZONTAL_GAP = 45;
-  const VERTICAL_GAP = 170;
-
-  sortedGenerations.forEach(
-    ([level, generationPeople]) => {
-      const totalWidth =
-        generationPeople.length * NODE_WIDTH +
-        Math.max(
-          generationPeople.length - 1,
-          0
-        ) * HORIZONTAL_GAP;
-
-      generationPeople.forEach((person, index) => {
-        const x =
-          -totalWidth / 2 +
-          NODE_WIDTH / 2 +
-          index *
-            (NODE_WIDTH + HORIZONTAL_GAP);
-
-        const y = level * VERTICAL_GAP;
-
-        nodes.push({
-          ...person,
-          x,
-          y,
-          generation: level,
-        });
-      });
-    }
-  );
-
-  return {
-    nodes,
-    relationships,
-  };
+  will-change: transform;
 }
 
-export default function TreeClient({ account }) {
-  const [people, setPeople] = useState([]);
-  const [relationships, setRelationships] =
-    useState([]);
+.tree-lines {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 3000px;
+  height: 2200px;
+  overflow: visible;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+.family-line,
+.spouse-line {
+  fill: none;
+  stroke: #cbbba3;
+  stroke-width: 2;
+}
 
-  const [selectedPerson, setSelectedPerson] =
-    useState(null);
+.spouse-line {
+  stroke: #ad9776;
+  stroke-dasharray: 5 5;
+}
 
-  const [search, setSearch] = useState("");
+.tree-nodes {
+  position: absolute;
+  inset: 0;
+}
 
-  const [scale, setScale] = useState(0.8);
-  const [position, setPosition] = useState({
-    x: 0,
-    y: 80,
-  });
+/* =========================================================
+   PERSON
+========================================================= */
 
-  const viewportRef = useRef(null);
-  const draggingRef = useRef(false);
-  const lastPointerRef = useRef({
-    x: 0,
-    y: 0,
-  });
+.family-tree-node {
+  position: absolute;
+  width: 180px;
+  min-height: 92px;
 
-  const currentPersonId = account?.person?.id;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
 
-  useEffect(() => {
-    let cancelled = false;
+  padding: 12px 15px;
 
-    async function loadTree() {
-      try {
-        setLoading(true);
-        setError("");
+  transform: translateX(-50%);
 
-        const response = await fetch(
-          "/api/tree",
-          {
-            method: "GET",
-            cache: "no-store",
-          }
-        );
+  border: 1px solid rgba(140, 119, 91, 0.15);
+  border-radius: 28px;
 
-        const data = await response.json();
+  background: rgba(255, 255, 255, 0.94);
 
-        if (!response.ok || !data.success) {
-          throw new Error(
-            data.message ||
-              "تعذر تحميل شجرة العائلة."
-          );
-        }
+  color: #222;
 
-        if (!cancelled) {
-          setPeople(data.people || []);
-          setRelationships(
-            data.relationships || []
-          );
-        }
-      } catch (error) {
-        console.error(error);
+  box-shadow:
+    0 10px 30px rgba(50, 40, 25, 0.06);
 
-        if (!cancelled) {
-          setError(
-            error.message ||
-              "تعذر تحميل شجرة العائلة."
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
+  text-align: right;
+  cursor: pointer;
 
-    loadTree();
+  transition:
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
+}
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+.family-tree-node:hover {
+  border-color: rgba(140, 119, 91, 0.35);
 
-  const graph = useMemo(() => {
-    return buildGraph(
-      people,
-      relationships
-    );
-  }, [people, relationships]);
+  background: #fff;
 
-  const filteredPeople = useMemo(() => {
-    const value = search.trim().toLowerCase();
+  box-shadow:
+    0 16px 35px rgba(50, 40, 25, 0.11);
+}
 
-    if (!value) {
-      return [];
-    }
+.family-tree-node.current-person {
+  border-color: #a88a63;
 
-    return people
-      .filter((person) =>
-        getFullName(person)
-          .toLowerCase()
-          .includes(value)
-      )
-      .slice(0, 8);
-  }, [people, search]);
-
-  function resetView() {
-    setScale(0.8);
-    setPosition({
-      x: 0,
-      y: 80,
-    });
-  }
-
-  function zoomIn() {
-    setScale((current) =>
-      Math.min(current + 0.1, 2)
-    );
-  }
-
-  function zoomOut() {
-    setScale((current) =>
-      Math.max(current - 0.1, 0.3)
-    );
-  }
-
-  function selectPerson(person) {
-    setSelectedPerson(person);
-    setSearch("");
-  }
-
-  function handleWheel(event) {
-    event.preventDefault();
-
-    const direction =
-      event.deltaY > 0 ? -0.06 : 0.06;
-
-    setScale((current) =>
-      Math.min(
-        Math.max(current + direction, 0.3),
-        2
-      )
-    );
-  }
-
-  function handlePointerDown(event) {
-    if (
-      event.target.closest(
-        ".family-tree-node"
-      )
-    ) {
-      return;
-    }
-
-    draggingRef.current = true;
-
-    lastPointerRef.current = {
-      x: event.clientX,
-      y: event.clientY,
-    };
-
-    event.currentTarget.setPointerCapture?.(
-      event.pointerId
-    );
-  }
-
-  function handlePointerMove(event) {
-    if (!draggingRef.current) {
-      return;
-    }
-
-    const deltaX =
-      event.clientX -
-      lastPointerRef.current.x;
-
-    const deltaY =
-      event.clientY -
-      lastPointerRef.current.y;
-
-    lastPointerRef.current = {
-      x: event.clientX,
-      y: event.clientY,
-    };
-
-    setPosition((current) => ({
-      x: current.x + deltaX,
-      y: current.y + deltaY,
-    }));
-  }
-
-  function handlePointerUp(event) {
-    draggingRef.current = false;
-
-    try {
-      event.currentTarget.releasePointerCapture?.(
-        event.pointerId
-      );
-    } catch {
-      // Ignore pointer release errors.
-    }
-  }
-
-  function getRelationshipLabel(personId) {
-    const relation = relationships.find(
-      (item) =>
-        item.person_id === currentPersonId &&
-        item.related_person_id === personId
+  background:
+    linear-gradient(
+      145deg,
+      #fff,
+      #f8f1e7
     );
 
-    if (!relation) {
-      return null;
-    }
+  box-shadow:
+    0 0 0 4px
+      rgba(168, 138, 99, 0.09),
+    0 15px 35px
+      rgba(50, 40, 25, 0.1);
+}
 
-    if (
-      relation.relationship_type === "father"
-    ) {
-      return "والدي";
-    }
+.family-tree-node.selected-person {
+  border-color: #765d3c;
+}
 
-    if (
-      relation.relationship_type === "mother"
-    ) {
-      return "والدتي";
-    }
+/* =========================================================
+   PHOTO
+========================================================= */
 
-    if (
-      relation.relationship_type === "spouse"
-    ) {
-      return "زوجي / زوجتي";
-    }
+.node-photo {
+  width: 54px;
+  height: 54px;
 
-    if (
-      relation.relationship_type === "child"
-    ) {
-      return "ابني / ابنتي";
-    }
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
-    return null;
+  flex-shrink: 0;
+
+  overflow: hidden;
+
+  border: 3px solid #f2eadf;
+  border-radius: 50%;
+
+  background: #eee5d8;
+
+  color: #765d3c;
+
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.node-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* =========================================================
+   NAME
+========================================================= */
+
+.node-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.node-content strong {
+  display: block;
+
+  overflow: hidden;
+
+  color: #252525;
+
+  font-size: 12px;
+  font-weight: 800;
+
+  line-height: 1.65;
+
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.node-relation {
+  display: inline-flex;
+
+  margin-top: 4px;
+  padding: 3px 7px;
+
+  border-radius: 20px;
+
+  background: #f5efe7;
+
+  color: #967a56;
+
+  font-size: 8px;
+  font-weight: 800;
+}
+
+/* =========================================================
+   STATES
+========================================================= */
+
+.tree-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 5;
+
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 9px;
+
+  transform: translate(-50%, -50%);
+
+  padding: 35px;
+
+  border: 1px solid #e4dfd7;
+  border-radius: 20px;
+
+  background: rgba(255, 255, 255, 0.92);
+
+  box-shadow:
+    0 20px 60px
+      rgba(30, 25, 18, 0.08);
+
+  text-align: center;
+
+  backdrop-filter: blur(10px);
+}
+
+.tree-state strong {
+  color: #333;
+  font-size: 14px;
+}
+
+.tree-state span {
+  color: #999;
+  font-size: 11px;
+}
+
+.tree-loader {
+  width: 28px;
+  height: 28px;
+
+  margin-bottom: 5px;
+
+  border: 3px solid #e7dfd4;
+  border-top-color: #947651;
+
+  border-radius: 50%;
+
+  animation:
+    tree-spin 0.8s linear infinite;
+}
+
+@keyframes tree-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tree-state-error button {
+  margin-top: 8px;
+  padding: 9px 14px;
+
+  border: 0;
+  border-radius: 9px;
+
+  background: #191919;
+  color: #fff;
+
+  font-size: 11px;
+}
+
+/* =========================================================
+   PERSON PANEL
+========================================================= */
+
+.person-panel {
+  position: fixed;
+  z-index: 60;
+
+  top: 106px;
+  left: 25px;
+  bottom: 25px;
+
+  width: 330px;
+
+  overflow-y: auto;
+
+  padding: 30px 25px;
+
+  border: 1px solid #e4ded5;
+  border-radius: 24px;
+
+  background: rgba(255, 255, 255, 0.96);
+
+  box-shadow:
+    0 20px 70px
+      rgba(30, 25, 18, 0.15);
+
+  backdrop-filter: blur(16px);
+}
+
+.person-panel-close {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+
+  width: 34px;
+  height: 34px;
+
+  border: 0;
+  border-radius: 10px;
+
+  background: #f5f1eb;
+  color: #666;
+
+  font-size: 20px;
+}
+
+.person-panel-photo {
+  width: 90px;
+  height: 90px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  margin-bottom: 20px;
+
+  border-radius: 50%;
+
+  background: #eee5d8;
+  color: #765d3c;
+
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.person-panel-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.person-panel-label {
+  display: block;
+  margin-bottom: 7px;
+
+  color: #a58a67;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.person-panel h2 {
+  margin: 0;
+  padding-left: 20px;
+
+  color: #242424;
+
+  font-size: 22px;
+  line-height: 1.5;
+}
+
+.you-badge {
+  display: inline-flex;
+
+  margin-top: 12px;
+  padding: 6px 9px;
+
+  border-radius: 8px;
+
+  background: #f1f6f1;
+  color: #47724c;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.person-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+
+  gap: 9px;
+
+  margin-top: 25px;
+}
+
+.person-details > div {
+  padding: 12px;
+
+  border-radius: 12px;
+
+  background: #faf8f5;
+}
+
+.person-details span,
+.person-bio > span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #a0a0a0;
+
+  font-size: 9px;
+}
+
+.person-details strong {
+  display: block;
+
+  color: #444;
+
+  font-size: 11px;
+
+  line-height: 1.6;
+}
+
+.english-date {
+  direction: ltr;
+  text-align: right;
+  font-family: Arial, sans-serif;
+}
+
+.person-bio {
+  margin-top: 18px;
+  padding: 14px;
+
+  border-radius: 13px;
+
+  background: #faf8f5;
+}
+
+.person-bio p {
+  margin: 0;
+
+  color: #666;
+
+  font-size: 11px;
+  line-height: 1.9;
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 800px) {
+  .tree-header {
+    height: 76px;
+    padding: 0 16px;
   }
 
-  const nodeMap = new Map(
-    graph.nodes.map((node) => [
-      node.id,
-      node,
-    ])
-  );
-
-  const svgRelationships = relationships
-    .filter((relationship) => {
-      return (
-        relationship.relationship_type ===
-          "father" ||
-        relationship.relationship_type ===
-          "mother" ||
-        relationship.relationship_type ===
-          "child" ||
-        relationship.relationship_type ===
-          "spouse"
-      );
-    })
-    .map((relationship) => {
-      const from = nodeMap.get(
-        relationship.person_id
-      );
-
-      const to = nodeMap.get(
-        relationship.related_person_id
-      );
-
-      if (!from || !to) {
-        return null;
-      }
-
-      return {
-        ...relationship,
-        from,
-        to,
-      };
-    })
-    .filter(Boolean);
-
-  return (
-    <main className="tree-page">
-
-      <header className="tree-header">
-
-        <div className="tree-header-title">
-          <a
-            href="/dashboard"
-            className="tree-back"
-          >
-            ←
-          </a>
-
-          <div>
-            <span>شجرة العائلة</span>
-            <h1>العائلة</h1>
-          </div>
-        </div>
-
-        <div className="tree-header-actions">
-
-          <div className="tree-search">
-
-            <span>⌕</span>
-
-            <input
-              value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
-              placeholder="ابحث عن شخص..."
-              aria-label="البحث عن شخص"
-            />
-
-            {filteredPeople.length > 0 && (
-              <div className="search-results">
-
-                {filteredPeople.map((person) => (
-                  <button
-                    key={person.id}
-                    onClick={() =>
-                      selectPerson(person)
-                    }
-                  >
-                    <span className="search-avatar">
-                      {person.first_name?.charAt(0)}
-                    </span>
-
-                    <span>
-                      {getFullName(person)}
-                    </span>
-                  </button>
-                ))}
-
-              </div>
-            )}
-
-          </div>
-
-          <a
-            href="/dashboard"
-            className="tree-dashboard-link"
-          >
-            لوحة التحكم
-          </a>
-
-        </div>
-
-      </header>
-
-      <div className="tree-toolbar">
-
-        <div className="tree-info">
-          <strong>
-            {people.length}
-          </strong>
-
-          <span>
-            شخصًا في الشجرة
-          </span>
-        </div>
-
-        <div className="tree-controls">
-
-          <button
-            onClick={zoomIn}
-            aria-label="تكبير"
-          >
-            +
-          </button>
-
-          <span>
-            {Math.round(scale * 100)}%
-          </span>
-
-          <button
-            onClick={zoomOut}
-            aria-label="تصغير"
-          >
-            −
-          </button>
-
-          <button
-            onClick={resetView}
-            className="reset-button"
-          >
-            إعادة ضبط
-          </button>
-
-        </div>
-
-      </div>
-
-      <section
-        ref={viewportRef}
-        className={`tree-viewport ${
-          draggingRef.current
-            ? "is-dragging"
-            : ""
-        }`}
-        onWheel={handleWheel}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      >
-
-        {loading && (
-          <div className="tree-state">
-            <div className="tree-loader" />
-
-            <strong>
-              جاري تحميل الشجرة...
-            </strong>
-
-            <span>
-              يتم جلب بيانات العائلة
-            </span>
-          </div>
-        )}
-
-        {!loading && error && (
-          <div className="tree-state tree-state-error">
-
-            <strong>
-              تعذر تحميل الشجرة
-            </strong>
-
-            <span>
-              {error}
-            </span>
-
-            <button
-              onClick={() =>
-                window.location.reload()
-              }
-            >
-              إعادة المحاولة
-            </button>
-
-          </div>
-        )}
-
-        {!loading &&
-          !error &&
-          people.length === 0 && (
-            <div className="tree-state">
-
-              <strong>
-                لا يوجد أشخاص حتى الآن
-              </strong>
-
-              <span>
-                أضف أفراد العائلة من لوحة الإدارة.
-              </span>
-
-            </div>
-          )}
-
-        {!loading &&
-          !error &&
-          people.length > 0 && (
-            <div
-              className="tree-canvas"
-              style={{
-                transform: `translate(
-                  calc(-50% + ${position.x}px),
-                  ${position.y}px
-                ) scale(${scale})`,
-              }}
-            >
-
-              <svg
-                className="tree-lines"
-                width="1"
-                height="1"
-                viewBox="-1500 -500 3000 2200"
-                preserveAspectRatio="xMidYMin meet"
-              >
-
-                {svgRelationships.map(
-                  (relationship) => {
-                    const {
-                      from,
-                      to,
-                      relationship_type,
-                    } = relationship;
-
-                    const startX =
-                      from.x;
-
-                    const startY =
-                      from.y +
-                      112;
-
-                    const endX =
-                      to.x;
-
-                    const endY =
-                      to.y;
-
-                    if (
-                      relationship_type ===
-                      "spouse"
-                    ) {
-                      const y =
-                        Math.min(
-                          from.y,
-                          to.y
-                        ) + 56;
-
-                      return (
-                        <line
-                          key={
-                            relationship.id
-                          }
-                          x1={startX}
-                          y1={y}
-                          x2={endX}
-                          y2={y}
-                          className="spouse-line"
-                        />
-                      );
-                    }
-
-                    const middleY =
-                      startY +
-                      (endY - startY) /
-                        2;
-
-                    return (
-                      <path
-                        key={
-                          relationship.id
-                        }
-                        d={`
-                          M ${startX} ${startY}
-                          C ${startX} ${middleY},
-                            ${endX} ${middleY},
-                            ${endX} ${endY}
-                        `}
-                        className="family-line"
-                      />
-                    );
-                  }
-                )}
-
-              </svg>
-
-              <div className="tree-nodes">
-
-                {graph.nodes.map((person) => {
-                  const isCurrent =
-                    person.id ===
-                    currentPersonId;
-
-                  const relationshipLabel =
-                    getRelationshipLabel(
-                      person.id
-                    );
-
-                  const isSelected =
-                    selectedPerson?.id ===
-                    person.id;
-
-                  return (
-                    <button
-                      key={person.id}
-                      className={`family-tree-node ${
-                        isCurrent
-                          ? "current-person"
-                          : ""
-                      } ${
-                        isSelected
-                          ? "selected-person"
-                          : ""
-                      }`}
-                      style={{
-                        left: `calc(50% + ${person.x}px)`,
-                        top: `${person.y}px`,
-                      }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        selectPerson(person);
-                      }}
-                    >
-
-                      <div className="node-photo">
-
-                        {person.photo_url ? (
-                          <img
-                            src={
-                              person.photo_url
-                            }
-                            alt=""
-                          />
-                        ) : (
-                          <span>
-                            {person.first_name?.charAt(
-                              0
-                            )}
-                          </span>
-                        )}
-
-                      </div>
-
-                      <div className="node-content">
-
-                        <strong>
-                          {getFullName(person)}
-                        </strong>
-
-                        {relationshipLabel && (
-                          <span className="node-relation">
-                            {relationshipLabel}
-                          </span>
-                        )}
-
-                        {!relationshipLabel &&
-                          isCurrent && (
-                            <span className="node-relation">
-                              أنت
-                            </span>
-                          )}
-
-                      </div>
-
-                    </button>
-                  );
-                })}
-
-              </div>
-
-            </div>
-          )}
-
-      </section>
-
-      {selectedPerson && (
-        <aside className="person-panel">
-
-          <button
-            className="person-panel-close"
-            onClick={() =>
-              setSelectedPerson(null)
-            }
-            aria-label="إغلاق"
-          >
-            ×
-          </button>
-
-          <div className="person-panel-photo">
-
-            {selectedPerson.photo_url ? (
-              <img
-                src={selectedPerson.photo_url}
-                alt=""
-              />
-            ) : (
-              <span>
-                {selectedPerson.first_name?.charAt(
-                  0
-                )}
-              </span>
-            )}
-
-          </div>
-
-          <span className="person-panel-label">
-            معلومات الشخص
-          </span>
-
-          <h2>
-            {getFullName(selectedPerson)}
-          </h2>
-
-          {selectedPerson.id ===
-            currentPersonId && (
-            <div className="you-badge">
-              هذا حسابك
-            </div>
-          )}
-
-          <div className="person-details">
-
-            <div>
-              <span>الجنس</span>
-              <strong>
-                {selectedPerson.gender ===
-                "male"
-                  ? "ذكر"
-                  : "أنثى"}
-              </strong>
-            </div>
-
-            {selectedPerson.birth_date && (
-              <div>
-                <span>تاريخ الميلاد</span>
-                <strong>
-                  {formatDate(
-                    selectedPerson.birth_date
-                  )}
-                </strong>
-              </div>
-            )}
-
-            {selectedPerson.death_date && (
-              <div>
-                <span>تاريخ الوفاة</span>
-                <strong>
-                  {formatDate(
-                    selectedPerson.death_date
-                  )}
-                </strong>
-              </div>
-            )}
-
-            {selectedPerson.birth_date && (
-              <div>
-                <span>
-                  {selectedPerson.death_date
-                    ? "العمر عند الوفاة"
-                    : "العمر"}
-                </span>
-
-                <strong>
-                  {calculateAge(
-                    selectedPerson.birth_date,
-                    selectedPerson.death_date
-                  )}{" "}
-                  سنة
-                </strong>
-              </div>
-            )}
-
-            {selectedPerson.birth_place && (
-              <div>
-                <span>مكان الميلاد</span>
-                <strong>
-                  {selectedPerson.birth_place}
-                </strong>
-              </div>
-            )}
-
-            {selectedPerson.death_place && (
-              <div>
-                <span>مكان الوفاة</span>
-                <strong>
-                  {selectedPerson.death_place}
-                </strong>
-              </div>
-            )}
-
-          </div>
-
-          {selectedPerson.bio && (
-            <div className="person-bio">
-              <span>نبذة</span>
-
-              <p>
-                {selectedPerson.bio}
-              </p>
-            </div>
-          )}
-
-        </aside>
-      )}
-
-    </main>
-  );
+  .tree-header-actions {
+    gap: 7px;
+  }
+
+  .tree-dashboard-link {
+    display: none;
+  }
+
+  .tree-search {
+    width: 190px;
+  }
+
+  .tree-toolbar {
+    top: 91px;
+    right: 16px;
+    left: 16px;
+  }
+
+  .tree-viewport {
+    top: 76px;
+  }
+
+  .tree-canvas {
+    top: 75px;
+  }
+
+  .person-panel {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+
+    width: auto;
+    max-height: 70vh;
+
+    padding: 25px 20px;
+
+    border-radius: 22px;
+  }
+
+  .person-panel-photo {
+    width: 70px;
+    height: 70px;
+
+    margin-bottom: 13px;
+  }
+
+  .person-panel h2 {
+    font-size: 19px;
+  }
+}
+
+@media (max-width: 520px) {
+  .tree-header-title h1 {
+    font-size: 18px;
+  }
+
+  .tree-header-title span {
+    font-size: 9px;
+  }
+
+  .tree-back {
+    width: 38px;
+    height: 38px;
+  }
+
+  .tree-search {
+    width: 145px;
+  }
+
+  .tree-search input {
+    height: 38px;
+    padding-right: 36px;
+    font-size: 10px;
+  }
+
+  .tree-controls {
+    transform: scale(0.9);
+    transform-origin: right center;
+  }
+
+  .tree-info {
+    display: none;
+  }
+
+  .person-details {
+    grid-template-columns: 1fr;
+  }
 }
