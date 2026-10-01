@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /* =========================================================
    HELPERS
@@ -41,12 +41,9 @@ function getFirstName(person) {
 }
 
 function calculateAge(birthDate, deathDate) {
-  if (!birthDate) {
-    return null;
-  }
+  if (!birthDate) return null;
 
   const birth = new Date(`${birthDate}T00:00:00`);
-
   const end = deathDate
     ? new Date(`${deathDate}T00:00:00`)
     : new Date();
@@ -80,9 +77,7 @@ function calculateAge(birthDate, deathDate) {
 }
 
 function formatGregorianDate(date) {
-  if (!date) {
-    return null;
-  }
+  if (!date) return null;
 
   const parts = String(date).split("-");
 
@@ -97,10 +92,7 @@ function formatGregorianDate(date) {
 }
 
 /* =========================================================
-   BUILD FAMILY TREE
-
-   الذكور فقط في الرسم.
-   الأب فوق الأبناء.
+   TREE GRAPH
 ========================================================= */
 
 function buildGraph(people, relationships) {
@@ -119,80 +111,104 @@ function buildGraph(people, relationships) {
   const childrenOf = new Map();
 
   males.forEach((person) => {
-    childrenOf.set(
-      person.id,
-      []
-    );
+    childrenOf.set(person.id, []);
   });
 
   relationships.forEach((relation) => {
     const a = relation.person_id;
     const b = relation.related_person_id;
 
+    /*
+     * person_id = الابن
+     * related_person_id = الأب
+     */
     if (
-      relation.relationship_type === "father"
+      relation.relationship_type === "father" &&
+      peopleMap.has(a) &&
+      peopleMap.has(b)
     ) {
+      fatherOf.set(a, b);
+
+      if (!childrenOf.has(b)) {
+        childrenOf.set(b, []);
+      }
+
       if (
-        peopleMap.has(a) &&
-        peopleMap.has(b)
+        !childrenOf
+          .get(b)
+          .includes(a)
       ) {
-        fatherOf.set(a, b);
-
-        if (!childrenOf.has(b)) {
-          childrenOf.set(b, []);
-        }
-
         childrenOf.get(b).push(a);
       }
     }
 
+    /*
+     * person_id = الأب
+     * related_person_id = الابن
+     */
     if (
-      relation.relationship_type === "child"
+      relation.relationship_type === "child" &&
+      peopleMap.has(a) &&
+      peopleMap.has(b)
     ) {
+      fatherOf.set(b, a);
+
+      if (!childrenOf.has(a)) {
+        childrenOf.set(a, []);
+      }
+
       if (
-        peopleMap.has(a) &&
-        peopleMap.has(b)
+        !childrenOf
+          .get(a)
+          .includes(b)
       ) {
-        fatherOf.set(b, a);
-
-        if (!childrenOf.has(a)) {
-          childrenOf.set(a, []);
-        }
-
-        if (
-          !childrenOf
-            .get(a)
-            .includes(b)
-        ) {
-          childrenOf
-            .get(a)
-            .push(b);
-        }
+        childrenOf.get(a).push(b);
       }
     }
   });
 
   /*
-   * حساب الجيل.
-   * الجذر = 0
-   * الابن = الأب + 1
+   * إزالة التكرار وترتيب الأبناء.
    */
+  childrenOf.forEach((children, parentId) => {
+    const unique = [
+      ...new Set(children),
+    ];
 
+    unique.sort((a, b) => {
+      const personA = peopleMap.get(a);
+      const personB = peopleMap.get(b);
+
+      return getFirstName(personA).localeCompare(
+        getFirstName(personB),
+        "ar"
+      );
+    });
+
+    childrenOf.set(
+      parentId,
+      unique
+    );
+  });
+
+  /*
+   * حساب الجيل.
+   */
   const generation = new Map();
 
-  function getGeneration(
+  function findGeneration(
     personId,
-    visiting = new Set()
+    visited = new Set()
   ) {
     if (generation.has(personId)) {
       return generation.get(personId);
     }
 
-    if (visiting.has(personId)) {
+    if (visited.has(personId)) {
       return 0;
     }
 
-    visiting.add(personId);
+    visited.add(personId);
 
     const fatherId =
       fatherOf.get(personId);
@@ -206,9 +222,9 @@ function buildGraph(people, relationships) {
     }
 
     const level =
-      getGeneration(
+      findGeneration(
         fatherId,
-        new Set(visiting)
+        new Set(visited)
       ) + 1;
 
     generation.set(
@@ -220,133 +236,118 @@ function buildGraph(people, relationships) {
   }
 
   males.forEach((person) => {
-    getGeneration(person.id);
+    findGeneration(person.id);
   });
 
   /*
-   * تجميع الأشخاص حسب الجيل.
+   * تجميع حسب الأجيال.
    */
-
-  const generations = new Map();
+  const levels = new Map();
 
   males.forEach((person) => {
     const level =
       generation.get(person.id) || 0;
 
-    if (!generations.has(level)) {
-      generations.set(level, []);
+    if (!levels.has(level)) {
+      levels.set(level, []);
     }
 
-    generations
+    levels
       .get(level)
       .push(person);
   });
 
-  const sortedLevels = [
-    ...generations.keys(),
-  ].sort((a, b) => a - b);
-
   /*
-   * ترتيب الأبناء تحت آبائهم قدر الإمكان.
-   *
-   * هذا يجعل الشجرة مقروءة بصريًا
-   * بدل ترتيب الأشخاص أبجديًا فقط.
+   * ترتيب كل جيل بحسب الأب.
    */
-
-  const orderedLevels = [];
-
-  sortedLevels.forEach((level) => {
-    const current =
-      generations.get(level) || [];
-
-    if (level === 0) {
-      orderedLevels.push({
+  const orderedLevels = [
+    ...levels.entries(),
+  ]
+    .sort(([a], [b]) => a - b)
+    .map(([level, levelPeople]) => {
+      return {
         level,
-        people: current,
-      });
-
-      return;
-    }
-
-    const previous =
-      orderedLevels[
-        orderedLevels.length - 1
-      ]?.people || [];
-
-    const previousIndex = new Map(
-      previous.map((person, index) => [
-        person.id,
-        index,
-      ])
-    );
-
-    const sorted = [...current].sort(
-      (a, b) => {
-        const fatherA =
-          fatherOf.get(a.id);
-
-        const fatherB =
-          fatherOf.get(b.id);
-
-        const indexA =
-          previousIndex.has(fatherA)
-            ? previousIndex.get(fatherA)
-            : 999999;
-
-        const indexB =
-          previousIndex.has(fatherB)
-            ? previousIndex.get(fatherB)
-            : 999999;
-
-        if (indexA !== indexB) {
-          return indexA - indexB;
-        }
-
-        return getFirstName(a).localeCompare(
-          getFirstName(b),
-          "ar"
-        );
-      }
-    );
-
-    orderedLevels.push({
-      level,
-      people: sorted,
+        people: levelPeople,
+      };
     });
-  });
 
-  /*
-   * أبعاد العقد.
-   */
+  const NODE_WIDTH = 140;
+  const NODE_HEIGHT = 140;
 
-  const NODE_WIDTH = 150;
-  const NODE_HEIGHT = 88;
-
-  const HORIZONTAL_GAP = 70;
-  const VERTICAL_GAP = 150;
-
-  /*
-   * تحديد X لكل شخص.
-   */
+  const HORIZONTAL_GAP = 95;
+  const VERTICAL_GAP = 180;
 
   const nodes = [];
   const nodeMap = new Map();
 
+  /*
+   * لكل جيل نضع الأشخاص
+   * في صف مستقل.
+   */
   orderedLevels.forEach(
     ({ level, people: levelPeople }) => {
-      const totalWidth =
-        levelPeople.length *
-          NODE_WIDTH +
-        Math.max(
-          levelPeople.length - 1,
-          0
-        ) *
-          HORIZONTAL_GAP;
+      const sorted = [...levelPeople];
 
-      levelPeople.forEach(
+      if (level > 0) {
+        const previousLevel =
+          orderedLevels.find(
+            (item) =>
+              item.level === level - 1
+          );
+
+        const previousPeople =
+          previousLevel?.people || [];
+
+        const previousIndex =
+          new Map(
+            previousPeople.map(
+              (person, index) => [
+                person.id,
+                index,
+              ]
+            )
+          );
+
+        sorted.sort((a, b) => {
+          const fatherA =
+            fatherOf.get(a.id);
+
+          const fatherB =
+            fatherOf.get(b.id);
+
+          const indexA =
+            previousIndex.has(fatherA)
+              ? previousIndex.get(fatherA)
+              : 99999;
+
+          const indexB =
+            previousIndex.has(fatherB)
+              ? previousIndex.get(fatherB)
+              : 99999;
+
+          if (indexA !== indexB) {
+            return indexA - indexB;
+          }
+
+          return getFirstName(a).localeCompare(
+            getFirstName(b),
+            "ar"
+          );
+        });
+      }
+
+      const totalWidth =
+        sorted.length * NODE_WIDTH +
+        Math.max(
+          0,
+          sorted.length - 1
+        ) * HORIZONTAL_GAP;
+
+      sorted.forEach(
         (person, index) => {
           const x =
-            -totalWidth / 2 +
+            1500 -
+            totalWidth / 2 +
             NODE_WIDTH / 2 +
             index *
               (NODE_WIDTH +
@@ -363,20 +364,19 @@ function buildGraph(people, relationships) {
           };
 
           nodes.push(node);
-          nodeMap.set(person.id, node);
+          nodeMap.set(
+            person.id,
+            node
+          );
         }
       );
     }
   );
 
   /*
-   * خطوط الأب -> الأبناء.
-   *
-   * نرجع بيانات الخطوط فقط،
-   * والرسم الحقيقي يتم في SVG.
+   * روابط الأبناء.
    */
-
-  const familyConnections = [];
+  const connections = [];
 
   fatherOf.forEach(
     (fatherId, childId) => {
@@ -390,7 +390,7 @@ function buildGraph(people, relationships) {
         return;
       }
 
-      familyConnections.push({
+      connections.push({
         id: `${fatherId}-${childId}`,
         father,
         child,
@@ -400,14 +400,20 @@ function buildGraph(people, relationships) {
 
   return {
     nodes,
-    familyConnections,
+    connections,
   };
 }
+
+/* =========================================================
+   COMPONENT
+========================================================= */
 
 export default function TreeClient({
   account,
 }) {
-  const [people, setPeople] = useState([]);
+  const [people, setPeople] =
+    useState([]);
+
   const [relationships, setRelationships] =
     useState([]);
 
@@ -417,10 +423,8 @@ export default function TreeClient({
   const [error, setError] =
     useState("");
 
-  const [
-    selectedPerson,
-    setSelectedPerson,
-  ] = useState(null);
+  const [selectedPerson, setSelectedPerson] =
+    useState(null);
 
   const [search, setSearch] =
     useState("");
@@ -431,15 +435,14 @@ export default function TreeClient({
   const [position, setPosition] =
     useState({
       x: 0,
-      y: 80,
+      y: 65,
     });
 
-  const draggingRef = useRef(false);
+  const [dragging, setDragging] =
+    useState(false);
 
-  const lastPointerRef = useRef({
-    x: 0,
-    y: 0,
-  });
+  const [lastPointer, setLastPointer] =
+    useState(null);
 
   const currentPersonId =
     account?.person?.id;
@@ -486,12 +489,12 @@ export default function TreeClient({
             data.relationships || []
           );
         }
-      } catch (error) {
-        console.error(error);
+      } catch (err) {
+        console.error(err);
 
         if (!cancelled) {
           setError(
-            error.message ||
+            err.message ||
               "تعذر تحميل شجرة العائلة."
           );
         }
@@ -536,11 +539,11 @@ export default function TreeClient({
      SEARCH
   ======================================================= */
 
-  const filteredPeople = useMemo(() => {
-    const value =
+  const searchResults = useMemo(() => {
+    const query =
       search.trim().toLowerCase();
 
-    if (!value) {
+    if (!query) {
       return [];
     }
 
@@ -548,13 +551,16 @@ export default function TreeClient({
       .filter((person) =>
         getFullName(person)
           .toLowerCase()
-          .includes(value)
+          .includes(query)
       )
       .slice(0, 8);
-  }, [people, search]);
+  }, [
+    people,
+    search,
+  ]);
 
   /* =======================================================
-     SELECTED PERSON RELATIONS
+     RELATIONS
   ======================================================= */
 
   const selectedRelations =
@@ -576,156 +582,107 @@ export default function TreeClient({
 
       relationships.forEach(
         (relation) => {
-          const {
-            person_id,
-            related_person_id,
-            relationship_type,
-          } = relation;
-
           if (
-            relationship_type ===
-              "father" &&
-            person_id ===
-              selectedPerson.id
-          ) {
-            father =
-              peopleMap.get(
-                related_person_id
-              ) || null;
-          }
-
-          if (
-            relationship_type ===
-              "mother" &&
-            person_id ===
-              selectedPerson.id
-          ) {
-            mother =
-              peopleMap.get(
-                related_person_id
-              ) || null;
-          }
-
-          if (
-            relationship_type ===
-              "spouse" &&
-            person_id ===
-              selectedPerson.id
-          ) {
-            spouse =
-              peopleMap.get(
-                related_person_id
-              ) || null;
-          }
-
-          if (
-            relationship_type ===
-              "child" &&
-            person_id ===
-              selectedPerson.id
-          ) {
-            const child =
-              peopleMap.get(
-                related_person_id
-              );
-
-            if (child) {
-              children.push(child);
-            }
-          }
-        }
-      );
-
-      relationships.forEach(
-        (relation) => {
-          if (
-            relation.related_person_id !==
+            relation.person_id ===
             selectedPerson.id
           ) {
-            return;
-          }
-
-          if (
-            relation.relationship_type ===
-              "father" &&
-            !father
-          ) {
-            father =
+            const related =
               peopleMap.get(
-                relation.person_id
-              ) || null;
-          }
-
-          if (
-            relation.relationship_type ===
-              "mother" &&
-            !mother
-          ) {
-            mother =
-              peopleMap.get(
-                relation.person_id
-              ) || null;
-          }
-
-          if (
-            relation.relationship_type ===
-              "spouse" &&
-            !spouse
-          ) {
-            spouse =
-              peopleMap.get(
-                relation.person_id
-              ) || null;
-          }
-
-          if (
-            relation.relationship_type ===
-            "child"
-          ) {
-            const child =
-              peopleMap.get(
-                relation.person_id
+                relation.related_person_id
               );
 
             if (
-              child &&
-              !children.some(
-                (item) =>
-                  item.id === child.id
-              )
+              relation.relationship_type ===
+              "father"
             ) {
-              children.push(child);
+              father = related || null;
             }
-          }
-        }
-      );
 
-      relationships.forEach(
-        (relation) => {
-          if (
-            relation.relationship_type !==
-            "father"
-          ) {
-            return;
+            if (
+              relation.relationship_type ===
+              "mother"
+            ) {
+              mother = related || null;
+            }
+
+            if (
+              relation.relationship_type ===
+              "spouse"
+            ) {
+              spouse = related || null;
+            }
+
+            if (
+              relation.relationship_type ===
+              "child"
+            ) {
+              if (
+                related &&
+                !children.some(
+                  (item) =>
+                    item.id ===
+                    related.id
+                )
+              ) {
+                children.push(
+                  related
+                );
+              }
+            }
           }
 
           if (
             relation.related_person_id ===
             selectedPerson.id
           ) {
-            const child =
+            const related =
               peopleMap.get(
                 relation.person_id
               );
 
             if (
-              child &&
-              !children.some(
-                (item) =>
-                  item.id === child.id
-              )
+              relation.relationship_type ===
+                "father" &&
+              !father
             ) {
-              children.push(child);
+              father =
+                related || null;
+            }
+
+            if (
+              relation.relationship_type ===
+                "mother" &&
+              !mother
+            ) {
+              mother =
+                related || null;
+            }
+
+            if (
+              relation.relationship_type ===
+                "spouse" &&
+              !spouse
+            ) {
+              spouse =
+                related || null;
+            }
+
+            if (
+              relation.relationship_type ===
+              "child"
+            ) {
+              if (
+                related &&
+                !children.some(
+                  (item) =>
+                    item.id ===
+                    related.id
+                )
+              ) {
+                children.push(
+                  related
+                );
+              }
             }
           }
         }
@@ -747,53 +704,48 @@ export default function TreeClient({
      CONTROLS
   ======================================================= */
 
-  function resetView() {
-    setScale(0.8);
-
-    setPosition({
-      x: 0,
-      y: 80,
-    });
-  }
-
   function zoomIn() {
-    setScale((current) =>
+    setScale((value) =>
       Math.min(
-        current + 0.1,
-        2
+        value + 0.1,
+        1.8
       )
     );
   }
 
   function zoomOut() {
-    setScale((current) =>
+    setScale((value) =>
       Math.max(
-        current - 0.1,
-        0.3
+        value - 0.1,
+        0.35
       )
     );
   }
 
-  function selectPerson(person) {
-    setSelectedPerson(person);
-    setSearch("");
+  function resetView() {
+    setScale(0.8);
+
+    setPosition({
+      x: 0,
+      y: 65,
+    });
   }
 
   function handleWheel(event) {
     event.preventDefault();
 
-    const direction =
+    const change =
       event.deltaY > 0
-        ? -0.06
-        : 0.06;
+        ? -0.05
+        : 0.05;
 
-    setScale((current) =>
+    setScale((value) =>
       Math.min(
         Math.max(
-          current + direction,
-          0.3
+          value + change,
+          0.35
         ),
-        2
+        1.8
       )
     );
   }
@@ -807,111 +759,70 @@ export default function TreeClient({
       return;
     }
 
-    draggingRef.current = true;
+    setDragging(true);
 
-    lastPointerRef.current = {
+    setLastPointer({
       x: event.clientX,
       y: event.clientY,
-    };
-
-    event.currentTarget.setPointerCapture?.(
-      event.pointerId
-    );
+    });
   }
 
   function handlePointerMove(event) {
-    if (!draggingRef.current) {
+    if (
+      !dragging ||
+      !lastPointer
+    ) {
       return;
     }
 
-    const deltaX =
+    const dx =
       event.clientX -
-      lastPointerRef.current.x;
+      lastPointer.x;
 
-    const deltaY =
+    const dy =
       event.clientY -
-      lastPointerRef.current.y;
+      lastPointer.y;
 
-    lastPointerRef.current = {
+    setLastPointer({
       x: event.clientX,
       y: event.clientY,
-    };
+    });
 
     setPosition((current) => ({
-      x: current.x + deltaX,
-      y: current.y + deltaY,
+      x: current.x + dx,
+      y: current.y + dy,
     }));
   }
 
-  function handlePointerUp(event) {
-    draggingRef.current = false;
-
-    try {
-      event.currentTarget.releasePointerCapture?.(
-        event.pointerId
-      );
-    } catch {
-      // تجاهل الخطأ
-    }
+  function handlePointerUp() {
+    setDragging(false);
+    setLastPointer(null);
   }
 
-  function getRelationshipLabel(
-    personId
-  ) {
-    if (!currentPersonId) {
-      return null;
-    }
+  function selectPerson(person) {
+    setSelectedPerson(person);
+    setSearch("");
+  }
 
-    const relation =
-      relationships.find(
-        (item) =>
-          item.person_id ===
-            currentPersonId &&
-          item.related_person_id ===
-            personId
-      );
-
-    if (!relation) {
-      return null;
-    }
-
+  function getRelationLabel(personId) {
     if (
-      relation.relationship_type ===
-      "father"
+      personId ===
+      currentPersonId
     ) {
-      return "والدي";
-    }
-
-    if (
-      relation.relationship_type ===
-      "mother"
-    ) {
-      return "والدتي";
-    }
-
-    if (
-      relation.relationship_type ===
-      "spouse"
-    ) {
-      return "زوجي / زوجتي";
-    }
-
-    if (
-      relation.relationship_type ===
-      "child"
-    ) {
-      return "ابني / ابنتي";
+      return "أنت";
     }
 
     return null;
   }
 
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
   return (
     <main className="tree-page">
 
-      {/* ===================================================
-          HEADER
-      =================================================== */}
+      {/* HEADER */}
 
       <header className="tree-header">
 
@@ -940,7 +851,9 @@ export default function TreeClient({
 
           <div className="tree-search">
 
-            <span>⌕</span>
+            <span>
+              ⌕
+            </span>
 
             <input
               value={search}
@@ -950,14 +863,13 @@ export default function TreeClient({
                 )
               }
               placeholder="ابحث عن شخص..."
-              aria-label="البحث عن شخص"
             />
 
-            {filteredPeople.length >
+            {searchResults.length >
               0 && (
               <div className="search-results">
 
-                {filteredPeople.map(
+                {searchResults.map(
                   (person) => (
                     <button
                       key={person.id}
@@ -998,14 +910,11 @@ export default function TreeClient({
 
       </header>
 
-      {/* ===================================================
-          TOOLBAR
-      =================================================== */}
+      {/* TOOLBAR */}
 
       <div className="tree-toolbar">
 
         <div className="tree-info">
-
           <strong>
             {graph.nodes.length}
           </strong>
@@ -1013,14 +922,12 @@ export default function TreeClient({
           <span>
             رجلًا في الشجرة
           </span>
-
         </div>
 
         <div className="tree-controls">
 
           <button
             onClick={zoomIn}
-            aria-label="تكبير"
           >
             +
           </button>
@@ -1034,14 +941,13 @@ export default function TreeClient({
 
           <button
             onClick={zoomOut}
-            aria-label="تصغير"
           >
             −
           </button>
 
           <button
-            onClick={resetView}
             className="reset-button"
+            onClick={resetView}
           >
             إعادة ضبط
           </button>
@@ -1050,12 +956,14 @@ export default function TreeClient({
 
       </div>
 
-      {/* ===================================================
-          TREE VIEWPORT
-      =================================================== */}
+      {/* TREE */}
 
       <section
-        className="tree-viewport"
+        className={`tree-viewport ${
+          dragging
+            ? "is-dragging"
+            : ""
+        }`}
         onWheel={handleWheel}
         onPointerDown={
           handlePointerDown
@@ -1079,10 +987,6 @@ export default function TreeClient({
             <strong>
               جاري تحميل الشجرة...
             </strong>
-
-            <span>
-              يتم جلب بيانات العائلة
-            </span>
 
           </div>
         )}
@@ -1115,7 +1019,7 @@ export default function TreeClient({
             <div className="tree-state">
 
               <strong>
-                لا يوجد رجال في الشجرة حتى الآن
+                لا توجد بيانات في الشجرة
               </strong>
 
               <span>
@@ -1128,171 +1032,179 @@ export default function TreeClient({
         {!loading &&
           !error &&
           graph.nodes.length > 0 && (
-            <div
-              className="tree-canvas"
-              style={{
-                transform: `translate(
+
+          <div
+            className="tree-canvas"
+            style={{
+              transform: `
+                translate(
                   calc(-50% + ${position.x}px),
                   ${position.y}px
-                ) scale(${scale})`,
-              }}
+                )
+                scale(${scale})
+              `,
+            }}
+          >
+
+            {/* LINES */}
+
+            <svg
+              className="tree-lines"
+              viewBox="0 0 3000 2200"
+              preserveAspectRatio="none"
             >
 
-              {/* =================================================
-                  FAMILY LINES
-              ================================================= */}
+              {graph.connections.map(
+                (connection) => {
+                  const father =
+                    connection.father;
 
-              <svg
-                className="tree-lines"
-                width="1"
-                height="1"
-                viewBox="-1500 -500 3000 2200"
-                preserveAspectRatio="xMidYMin meet"
-              >
+                  const child =
+                    connection.child;
 
-                {graph.familyConnections.map(
-                  (connection) => {
-                    const {
-                      father,
-                      child,
-                    } = connection;
+                  const startX =
+                    father.x;
 
-                    const fatherBottom =
-                      father.y + 88;
+                  const startY =
+                    father.y + 140;
 
-                    const childTop =
-                      child.y;
+                  const endX =
+                    child.x;
 
-                    const middleY =
-                      fatherBottom +
-                      (childTop -
-                        fatherBottom) /
-                        2;
+                  const endY =
+                    child.y;
 
-                    return (
-                      <path
-                        key={
-                          connection.id
-                        }
-                        d={`
-                          M ${father.x} ${fatherBottom}
-                          L ${father.x} ${middleY}
-                          L ${child.x} ${middleY}
-                          L ${child.x} ${childTop}
-                        `}
-                        className="family-line"
-                      />
+                  /*
+                   * منحنى ناعم.
+                   *
+                   * لا توجد زوايا حادة.
+                   */
+                  const distance =
+                    Math.abs(
+                      endY -
+                        startY
                     );
-                  }
-                )}
 
-              </svg>
+                  const curve =
+                    Math.max(
+                      45,
+                      distance * 0.42
+                    );
 
-              {/* =================================================
-                  NODES
-              ================================================= */}
+                  const path = `
+                    M ${startX} ${startY}
+                    C
+                      ${startX} ${startY + curve}
+                      ${endX} ${endY - curve}
+                      ${endX} ${endY}
+                  `;
 
-              <div className="tree-nodes">
+                  return (
+                    <path
+                      key={
+                        connection.id
+                      }
+                      d={path}
+                      className="family-line"
+                    />
+                  );
+                }
+              )}
 
-                {graph.nodes.map(
-                  (person) => {
-                    const isCurrent =
-                      person.id ===
-                      currentPersonId;
+            </svg>
 
-                    const relation =
-                      getRelationshipLabel(
-                        person.id
-                      );
+            {/* NODES */}
 
-                    const isSelected =
-                      selectedPerson?.id ===
-                      person.id;
+            <div className="tree-nodes">
 
-                    return (
-                      <button
-                        key={person.id}
-                        className={`family-tree-node ${
+              {graph.nodes.map(
+                (person) => {
+                  const relation =
+                    getRelationLabel(
+                      person.id
+                    );
+
+                  const isCurrent =
+                    person.id ===
+                    currentPersonId;
+
+                  const isSelected =
+                    selectedPerson?.id ===
+                    person.id;
+
+                  return (
+                    <button
+                      key={person.id}
+                      className={`
+                        family-tree-node
+                        ${
                           isCurrent
                             ? "current-person"
                             : ""
-                        } ${
+                        }
+                        ${
                           isSelected
                             ? "selected-person"
                             : ""
-                        }`}
-                        style={{
-                          left: `calc(
-                            50% + ${person.x}px
-                          )`,
-                          top: `${person.y}px`,
-                        }}
-                        onClick={(event) => {
-                          event.stopPropagation();
+                        }
+                      `}
+                      style={{
+                        left: `${person.x}px`,
+                        top: `${person.y}px`,
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation();
 
-                          selectPerson(
-                            person
-                          );
-                        }}
-                      >
+                        selectPerson(
+                          person
+                        );
+                      }}
+                    >
 
-                        <div className="node-photo">
+                      <div className="node-photo">
 
-                          {person.photo_url ? (
-                            <img
-                              src={
-                                person.photo_url
-                              }
-                              alt=""
-                            />
-                          ) : (
-                            <span>
-                              {getFirstName(
-                                person
-                              ).charAt(0)}
-                            </span>
-                          )}
-
-                        </div>
-
-                        <div className="node-content">
-
-                          <strong>
+                        {person.photo_url ? (
+                          <img
+                            src={
+                              person.photo_url
+                            }
+                            alt=""
+                          />
+                        ) : (
+                          <span>
                             {getFirstName(
                               person
-                            )}
-                          </strong>
+                            ).charAt(0)}
+                          </span>
+                        )}
 
-                          {relation && (
-                            <span className="node-relation">
-                              {relation}
-                            </span>
-                          )}
+                      </div>
 
-                          {!relation &&
-                            isCurrent && (
-                            <span className="node-relation">
-                              أنت
-                            </span>
-                          )}
+                      <strong className="node-name">
+                        {getFirstName(
+                          person
+                        )}
+                      </strong>
 
-                        </div>
+                      {relation && (
+                        <span className="node-relation">
+                          {relation}
+                        </span>
+                      )}
 
-                      </button>
-                    );
-                  }
-                )}
-
-              </div>
+                    </button>
+                  );
+                }
+              )}
 
             </div>
-          )}
+
+          </div>
+        )}
 
       </section>
 
-      {/* =====================================================
-          PERSON PANEL
-      ===================================================== */}
+      {/* PERSON PANEL */}
 
       {selectedPerson && (
         <aside className="person-panel">
@@ -1302,7 +1214,6 @@ export default function TreeClient({
             onClick={() =>
               setSelectedPerson(null)
             }
-            aria-label="إغلاق"
           >
             ×
           </button>
@@ -1389,9 +1300,7 @@ export default function TreeClient({
             {selectedPerson.birth_date && (
               <div>
                 <span>
-                  {selectedPerson.death_date
-                    ? "العمر عند الوفاة"
-                    : "العمر"}
+                  العمر
                 </span>
 
                 <strong>
@@ -1433,10 +1342,6 @@ export default function TreeClient({
             )}
 
           </div>
-
-          {/* =================================================
-              FAMILY RELATIONS
-          ================================================= */}
 
           <div className="person-relations">
 
