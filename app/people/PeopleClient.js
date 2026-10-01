@@ -2,40 +2,38 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
 function formatDate(date) {
-  if (!date) {
-    return null;
-  }
+  if (!date) return "غير محدد";
 
   const value = new Date(`${date}T00:00:00`);
 
   if (Number.isNaN(value.getTime())) {
-    return null;
+    return date;
   }
 
-  const day = String(value.getDate()).padStart(2, "0");
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const year = value.getFullYear();
-
-  return `${day}/${month}/${year}`;
+  return value.toLocaleDateString("ar-SA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 function calculateAge(birthDate, deathDate = null) {
-  if (!birthDate) {
-    return null;
-  }
+  if (!birthDate) return null;
 
   const birth = new Date(`${birthDate}T00:00:00`);
-
-  if (Number.isNaN(birth.getTime())) {
-    return null;
-  }
-
   const end = deathDate
     ? new Date(`${deathDate}T00:00:00`)
     : new Date();
 
-  if (Number.isNaN(end.getTime())) {
+  if (
+    Number.isNaN(birth.getTime()) ||
+    Number.isNaN(end.getTime())
+  ) {
     return null;
   }
 
@@ -55,19 +53,10 @@ function calculateAge(birthDate, deathDate = null) {
     age--;
   }
 
-  return Math.max(age, 0);
+  return age >= 0 ? age : null;
 }
 
 function getFullName(person) {
-  if (
-    Array.isArray(person?.name_parts) &&
-    person.name_parts.length
-  ) {
-    return person.name_parts
-      .filter(Boolean)
-      .join(" ");
-  }
-
   return [
     person?.first_name,
     person?.middle_name,
@@ -79,15 +68,25 @@ function getFullName(person) {
 
 function getInitial(person) {
   return (
-    person?.first_name?.charAt(0) ||
-    person?.name_parts?.[0]?.charAt(0) ||
+    person?.first_name?.trim()?.charAt(0) ||
     "؟"
   );
 }
 
+/* =========================================================
+   COMPONENT
+========================================================= */
+
 export default function PeopleClient({
   account,
 }) {
+  const isEditor =
+    account?.role === "editor";
+
+  /* =======================================================
+     PEOPLE
+  ======================================================= */
+
   const [people, setPeople] = useState([]);
   const [loading, setLoading] =
     useState(true);
@@ -97,100 +96,131 @@ export default function PeopleClient({
   const [search, setSearch] =
     useState("");
 
+  /* =======================================================
+     SELECTED PERSON
+  ======================================================= */
+
   const [selectedPerson, setSelectedPerson] =
     useState(null);
 
-  const [accountModalOpen, setAccountModalOpen] =
+  /* =======================================================
+     CREATE PERSON
+  ======================================================= */
+
+  const [showCreateModal, setShowCreateModal] =
     useState(false);
 
-  const [username, setUsername] =
-    useState("");
-  const [password, setPassword] =
-    useState("");
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
-
-  const [creatingAccount, setCreatingAccount] =
+  const [createLoading, setCreateLoading] =
     useState(false);
 
-  const [accountMessage, setAccountMessage] =
+  const [createError, setCreateError] =
     useState("");
+
+  const [createForm, setCreateForm] =
+    useState({
+      full_name: "",
+      gender: "male",
+      birth_date: "",
+      death_date: "",
+      birth_place: "",
+      death_place: "",
+      bio: "",
+    });
+
+  /* =======================================================
+     CREATE ACCOUNT
+  ======================================================= */
+
+  const [showAccountModal, setShowAccountModal] =
+    useState(false);
+
+  const [accountPerson, setAccountPerson] =
+    useState(null);
+
+  const [accountLoading, setAccountLoading] =
+    useState(false);
+
   const [accountError, setAccountError] =
     useState("");
 
-  /*
-  =======================================================
-  إضافة شخص جديد
-  =======================================================
-  */
+  const [accountForm, setAccountForm] =
+    useState({
+      username: "",
+      password: "",
+      confirm_password: "",
+    });
 
-  const [personModalOpen, setPersonModalOpen] =
+  /* =======================================================
+     EDIT PERSON
+  ======================================================= */
+
+  const [showEditModal, setShowEditModal] =
     useState(false);
 
-  const [newFullName, setNewFullName] =
-    useState("");
-
-  const [newGender, setNewGender] =
-    useState("male");
-
-  const [creatingPerson, setCreatingPerson] =
+  const [editLoading, setEditLoading] =
     useState(false);
 
-  const [personCreateMessage, setPersonCreateMessage] =
+  const [editError, setEditError] =
     useState("");
 
-  const [personCreateError, setPersonCreateError] =
+  const [editForm, setEditForm] =
+    useState({
+      id: "",
+      full_name: "",
+      gender: "male",
+      birth_date: "",
+      death_date: "",
+      birth_place: "",
+      death_place: "",
+      bio: "",
+    });
+
+  const [editPhoto, setEditPhoto] =
+    useState(null);
+
+  const [editPhotoPreview, setEditPhotoPreview] =
     useState("");
 
-  const [createdAncestors, setCreatedAncestors] =
-    useState([]);
+  /* =======================================================
+     DELETE
+  ======================================================= */
 
-  const [reusedAncestors, setReusedAncestors] =
-    useState([]);
+  const [deleteLoading, setDeleteLoading] =
+    useState(false);
 
-  const isEditor =
-    account?.role === "editor";
-
-  const person = account?.person;
-
-  const currentFullName =
-    getFullName(person);
+  /* =======================================================
+     LOAD PEOPLE
+  ======================================================= */
 
   async function loadPeople() {
-    setLoading(true);
-    setError("");
-
     try {
+      setLoading(true);
+      setError("");
+
       const response = await fetch(
         "/api/people",
         {
+          method: "GET",
           cache: "no-store",
         }
       );
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
-      if (
-        !response.ok ||
-        !data.success
-      ) {
-        setError(
+      if (!response.ok || !data.success) {
+        throw new Error(
           data.message ||
-            "تعذر تحميل أفراد العائلة."
+            "تعذر تحميل الأشخاص."
         );
-        return;
       }
 
       setPeople(data.people || []);
-    } catch (error) {
-      console.error(
-        "Load people error:",
-        error
-      );
+    } catch (err) {
+      console.error(err);
 
       setError(
-        "تعذر الاتصال بالخادم. حاول مرة أخرى."
+        err.message ||
+          "حدث خطأ أثناء تحميل الأشخاص."
       );
     } finally {
       setLoading(false);
@@ -201,196 +231,442 @@ export default function PeopleClient({
     loadPeople();
   }, []);
 
-  const filteredPeople =
-    useMemo(() => {
-      const value =
-        search.trim().toLowerCase();
+  /* =======================================================
+     FILTER
+  ======================================================= */
 
-      if (!value) {
-        return people;
-      }
+  const filteredPeople = useMemo(() => {
+    const value =
+      search.trim().toLowerCase();
 
-      return people.filter((item) => {
-        const name =
-          getFullName(item).toLowerCase();
+    if (!value) {
+      return people;
+    }
 
-        return name.includes(value);
-      });
-    }, [people, search]);
+    return people.filter((person) => {
+      const fullName =
+        getFullName(person).toLowerCase();
 
-  /*
-  =======================================================
-  إضافة شخص
-  =======================================================
-  */
+      return (
+        fullName.includes(value) ||
+        String(
+          person.birth_place || ""
+        )
+          .toLowerCase()
+          .includes(value) ||
+        String(
+          person.death_place || ""
+        )
+          .toLowerCase()
+          .includes(value)
+      );
+    });
+  }, [people, search]);
+
+  /* =======================================================
+     CREATE PERSON
+  ======================================================= */
 
   function openPersonCreateModal() {
-    setNewFullName("");
-    setNewGender("male");
-    setPersonCreateMessage("");
-    setPersonCreateError("");
-    setCreatedAncestors([]);
-    setReusedAncestors([]);
-    setPersonModalOpen(true);
+    setCreateError("");
+
+    setCreateForm({
+      full_name: "",
+      gender: "male",
+      birth_date: "",
+      death_date: "",
+      birth_place: "",
+      death_place: "",
+      bio: "",
+    });
+
+    setShowCreateModal(true);
   }
 
   function closePersonCreateModal() {
-    if (creatingPerson) {
-      return;
-    }
+    if (createLoading) return;
 
-    setPersonModalOpen(false);
+    setShowCreateModal(false);
+    setCreateError("");
   }
 
   async function createPerson(event) {
+    event.preventDefault();
+
+    try {
+      setCreateLoading(true);
+      setCreateError("");
+
+      const response = await fetch(
+        "/api/people",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify(
+            createForm
+          ),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            "تعذر إضافة الشخص."
+        );
+      }
+
+      if (data.person) {
+        setPeople((current) => [
+          ...current,
+          data.person,
+        ]);
+      } else {
+        await loadPeople();
+      }
+
+      setShowCreateModal(false);
+
+      setCreateForm({
+        full_name: "",
+        gender: "male",
+        birth_date: "",
+        death_date: "",
+        birth_place: "",
+        death_place: "",
+        bio: "",
+      });
+    } catch (err) {
+      console.error(err);
+
+      setCreateError(
+        err.message ||
+          "حدث خطأ أثناء إضافة الشخص."
+      );
+    } finally {
+      setCreateLoading(false);
+    }
+  }
+
+  /* =======================================================
+     PERSON DETAILS
+  ======================================================= */
+
+  function openPerson(person) {
+    setSelectedPerson(person);
+  }
+
+  function closePerson() {
+    setSelectedPerson(null);
+  }
+
+  /* =======================================================
+     EDIT PERSON
+  ======================================================= */
+
+  function openEditModal(person) {
+    if (!isEditor || !person) {
+      return;
+    }
+
+    setEditError("");
+
+    setEditForm({
+      id: person.id,
+      full_name: getFullName(person),
+      gender: person.gender || "male",
+      birth_date:
+        person.birth_date || "",
+      death_date:
+        person.death_date || "",
+      birth_place:
+        person.birth_place || "",
+      death_place:
+        person.death_place || "",
+      bio: person.bio || "",
+    });
+
+    setEditPhoto(null);
+
+    setEditPhotoPreview(
+      person.photo_url || ""
+    );
+
+    setShowEditModal(true);
+  }
+
+  function closeEditModal() {
+    if (editLoading) return;
+
+    setShowEditModal(false);
+    setEditError("");
+
+    if (
+      editPhotoPreview &&
+      editPhotoPreview.startsWith(
+        "blob:"
+      )
+    ) {
+      URL.revokeObjectURL(
+        editPhotoPreview
+      );
+    }
+
+    setEditPhoto(null);
+    setEditPhotoPreview("");
+  }
+
+  function handleEditPhotoChange(
+    event
+  ) {
+    const file =
+      event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setEditError(
+        "الملف المختار ليس صورة."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setEditError(
+        "حجم الصورة يجب ألا يتجاوز 5 ميجابايت."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
+    setEditError("");
+
+    if (
+      editPhotoPreview &&
+      editPhotoPreview.startsWith(
+        "blob:"
+      )
+    ) {
+      URL.revokeObjectURL(
+        editPhotoPreview
+      );
+    }
+
+    const preview =
+      URL.createObjectURL(file);
+
+    setEditPhoto(file);
+    setEditPhotoPreview(preview);
+  }
+
+  async function updatePerson(event) {
     event.preventDefault();
 
     if (!isEditor) {
       return;
     }
 
-    setPersonCreateMessage("");
-    setPersonCreateError("");
-    setCreatedAncestors([]);
-    setReusedAncestors([]);
-
-    const fullName =
-      newFullName
-        .trim()
-        .replace(/\s+/g, " ");
-
-    if (!fullName) {
-      setPersonCreateError(
-        "اكتب اسم الشخص كاملًا."
-      );
-      return;
-    }
-
-    const parts =
-      fullName
-        .split(" ")
-        .filter(Boolean);
-
-    if (parts.length < 1) {
-      setPersonCreateError(
-        "اسم الشخص غير صالح."
-      );
-      return;
-    }
-
-    setCreatingPerson(true);
-
     try {
-      const response =
-        await fetch(
-          "/api/people",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              action:
-                "create-person",
-              fullName,
-              gender:
-                newGender,
-              familyId:
-                account?.person
-                  ?.family_id,
-            }),
-          }
+      setEditLoading(true);
+      setEditError("");
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        "id",
+        editForm.id
+      );
+
+      formData.append(
+        "full_name",
+        editForm.full_name
+      );
+
+      formData.append(
+        "gender",
+        editForm.gender
+      );
+
+      formData.append(
+        "birth_date",
+        editForm.birth_date
+      );
+
+      formData.append(
+        "death_date",
+        editForm.death_date
+      );
+
+      formData.append(
+        "birth_place",
+        editForm.birth_place
+      );
+
+      formData.append(
+        "death_place",
+        editForm.death_place
+      );
+
+      formData.append(
+        "bio",
+        editForm.bio
+      );
+
+      if (editPhoto) {
+        formData.append(
+          "photo",
+          editPhoto
         );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data.success
-      ) {
-        setPersonCreateError(
-          data.message ||
-            "تعذر إضافة الشخص."
-        );
-
-        return;
       }
 
-      setPersonCreateMessage(
-        data.message ||
-          "تمت إضافة الشخص وسلسلة النسب بنجاح."
+      const response = await fetch(
+        "/api/people",
+        {
+          method: "PATCH",
+          body: formData,
+        }
       );
 
-      setCreatedAncestors(
-        data.createdAncestors ||
-          []
-      );
+      const data = await response.json();
 
-      setReusedAncestors(
-        data.reusedAncestors ||
-          []
-      );
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            "تعذر تعديل بيانات الشخص."
+        );
+      }
 
-      await loadPeople();
+      const updatedPerson =
+        data.person;
 
-      setNewFullName("");
-    } catch (error) {
-      console.error(
-        "Create person error:",
-        error
-      );
+      if (updatedPerson) {
+        setPeople((current) =>
+          current.map((person) =>
+            person.id ===
+            updatedPerson.id
+              ? updatedPerson
+              : person
+          )
+        );
 
-      setPersonCreateError(
-        "تعذر الاتصال بالخادم."
+        setSelectedPerson(
+          updatedPerson
+        );
+      } else {
+        await loadPeople();
+      }
+
+      closeEditModal();
+    } catch (err) {
+      console.error(err);
+
+      setEditError(
+        err.message ||
+          "حدث خطأ أثناء تعديل الشخص."
       );
     } finally {
-      setCreatingPerson(false);
+      setEditLoading(false);
     }
   }
 
-  /*
-  =======================================================
-  عرض شخص
-  =======================================================
-  */
+  /* =======================================================
+     DELETE PERSON
+  ======================================================= */
 
-  function openPerson(personData) {
-    setSelectedPerson(personData);
-    setAccountModalOpen(false);
-    setAccountMessage("");
-    setAccountError("");
+  async function deletePerson(person) {
+    if (!isEditor || !person) {
+      return;
+    }
+
+    const fullName =
+      getFullName(person);
+
+    const confirmed =
+      window.confirm(
+        `هل أنت متأكد من حذف "${fullName}"؟\n\nسيتم حذف الشخص من شجرة العائلة، وحذف حسابه وعلاقاته المرتبطة به.\n\nملفات الأرشيف نفسها لن يتم حذفها.`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeleteLoading(true);
+
+      const response = await fetch(
+        `/api/people?id=${encodeURIComponent(
+          person.id
+        )}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            "تعذر حذف الشخص."
+        );
+      }
+
+      setPeople((current) =>
+        current.filter(
+          (item) =>
+            item.id !== person.id
+        )
+      );
+
+      setSelectedPerson(null);
+    } catch (err) {
+      console.error(err);
+
+      window.alert(
+        err.message ||
+          "حدث خطأ أثناء حذف الشخص."
+      );
+    } finally {
+      setDeleteLoading(false);
+    }
   }
 
-  function closePerson() {
-    setSelectedPerson(null);
-    setAccountModalOpen(false);
-    setAccountMessage("");
-    setAccountError("");
-  }
+  /* =======================================================
+     ACCOUNT
+  ======================================================= */
 
-  /*
-  =======================================================
-  حساب الشخص
-  =======================================================
-  */
+  function openAccountModal(person) {
+    if (!person) return;
 
-  function openAccountModal() {
-    setUsername("");
-    setPassword("");
-    setConfirmPassword("");
-    setAccountMessage("");
+    setAccountPerson(person);
+
     setAccountError("");
-    setAccountModalOpen(true);
+
+    setAccountForm({
+      username: "",
+      password: "",
+      confirm_password: "",
+    });
+
+    setShowAccountModal(true);
   }
 
   function closeAccountModal() {
-    if (creatingAccount) {
-      return;
-    }
+    if (accountLoading) return;
 
-    setAccountModalOpen(false);
+    setShowAccountModal(false);
+    setAccountPerson(null);
+    setAccountError("");
   }
 
   async function createPersonAccount(
@@ -398,214 +674,83 @@ export default function PeopleClient({
   ) {
     event.preventDefault();
 
-    if (
-      !selectedPerson ||
-      !isEditor
-    ) {
+    if (!accountPerson) {
       return;
     }
 
-    setCreatingAccount(true);
-    setAccountMessage("");
-    setAccountError("");
-
     try {
-      const response =
-        await fetch(
-          "/api/people",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              action:
-                "create-account",
-              personId:
-                selectedPerson.id,
-              username:
-                username.trim(),
-              password,
-              confirmPassword,
-            }),
-          }
-        );
+      setAccountLoading(true);
+      setAccountError("");
 
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data.success
-      ) {
-        setAccountError(
-          data.message ||
-            "تعذر إنشاء الحساب."
-        );
-        return;
-      }
-
-      setAccountMessage(
-        "تم إنشاء حساب الشخص بنجاح."
-      );
-
-      setSelectedPerson(
-        (current) => {
-          if (!current) {
-            return current;
-          }
-
-          return {
-            ...current,
-            account:
-              data.account,
-          };
+      const response = await fetch(
+        "/api/accounts",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            person_id:
+              accountPerson.id,
+            username:
+              accountForm.username,
+            password:
+              accountForm.password,
+            confirm_password:
+              accountForm.confirm_password,
+          }),
         }
       );
 
-      setPeople(
-        (currentPeople) =>
-          currentPeople.map(
-            (item) =>
-              item.id ===
-              selectedPerson.id
-                ? {
-                    ...item,
-                    account:
-                      data.account,
-                  }
-                : item
-          )
-      );
+      const data = await response.json();
 
-      setUsername("");
-      setPassword("");
-      setConfirmPassword("");
-    } catch (error) {
-      console.error(
-        "Create person account error:",
-        error
-      );
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            "تعذر إنشاء الحساب."
+        );
+      }
+
+      closeAccountModal();
+    } catch (err) {
+      console.error(err);
 
       setAccountError(
-        "تعذر الاتصال بالخادم."
+        err.message ||
+          "حدث خطأ أثناء إنشاء الحساب."
       );
     } finally {
-      setCreatingAccount(false);
+      setAccountLoading(false);
     }
   }
 
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
   return (
     <main className="people-page">
+      <div className="people-container">
 
-      <header className="people-header">
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
-        <div className="people-header-main">
-
-          <a
-            href="/dashboard"
-            className="back-button"
-          >
-            <span>→</span>
-            الرئيسية
-          </a>
-
-          <div className="people-heading">
-
-            <span>
-              {isEditor
-                ? "إدارة أفراد العائلة"
-                : "أفراد العائلة"}
-            </span>
-
-            <h1>
-              الأشخاص
-            </h1>
+        <div className="people-header">
+          <div>
+            <h1>أفراد العائلة</h1>
 
             <p>
-              استعرض أفراد العائلة ومعلوماتهم وحساباتهم.
+              إدارة الأشخاص والبيانات
+              الأساسية للعائلة.
             </p>
-
-          </div>
-
-        </div>
-
-        <div className="people-header-account">
-
-          <div>
-            <strong>
-              {currentFullName ||
-                account?.username}
-            </strong>
-
-            <span>
-              {isEditor
-                ? "محرر النظام"
-                : "مستخدم"}
-            </span>
-          </div>
-
-          <div className="people-header-avatar">
-            {getInitial(person)}
-          </div>
-
-        </div>
-
-      </header>
-
-      <section className="people-content">
-
-        <div className="people-toolbar">
-
-          <div className="people-count">
-
-            <span>
-              إجمالي الأشخاص
-            </span>
-
-            <strong>
-              {people.length}
-            </strong>
-
-          </div>
-
-          <div className="people-search">
-
-            <span>
-              ⌕
-            </span>
-
-            <input
-              type="search"
-              value={search}
-              onChange={(event) =>
-                setSearch(
-                  event.target.value
-                )
-              }
-              placeholder="ابحث باسم الشخص..."
-              aria-label="البحث عن شخص"
-            />
-
-            {search && (
-              <button
-                type="button"
-                onClick={() =>
-                  setSearch("")
-                }
-                aria-label="مسح البحث"
-              >
-                ×
-              </button>
-            )}
-
           </div>
 
           {isEditor && (
             <button
               type="button"
-              className="create-person-button"
+              className="primary-button"
               onClick={
                 openPersonCreateModal
               }
@@ -613,600 +758,372 @@ export default function PeopleClient({
               + إضافة شخص
             </button>
           )}
-
         </div>
 
-        {loading && (
-          <div className="people-state">
+        {/* =================================================
+            TOOLBAR
+        ================================================= */}
 
-            <div className="people-loader" />
+        <div className="people-toolbar">
+          <div className="search-box">
+            <span>⌕</span>
 
+            <input
+              type="text"
+              value={search}
+              onChange={(event) =>
+                setSearch(
+                  event.target.value
+                )
+              }
+              placeholder="ابحث عن شخص..."
+            />
+          </div>
+
+          <div className="people-count">
+            {filteredPeople.length} شخص
+          </div>
+        </div>
+
+        {/* =================================================
+            ERROR
+        ================================================= */}
+
+        {error && (
+          <div className="error-box">
+            {error}
+          </div>
+        )}
+
+        {/* =================================================
+            LOADING
+        ================================================= */}
+
+        {loading ? (
+          <div className="empty-state">
+            <div className="loader" />
             <p>
               جاري تحميل أفراد العائلة...
             </p>
-
           </div>
-        )}
+        ) : filteredPeople.length ===
+          0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">
+              👤
+            </div>
 
-        {!loading && error && (
-          <div className="people-state people-state-error">
-
-            <strong>
-              تعذر تحميل الأشخاص
-            </strong>
+            <h3>
+              لا يوجد أشخاص
+            </h3>
 
             <p>
-              {error}
+              لم يتم العثور على أي شخص
+              مطابق للبحث.
             </p>
-
-            <button
-              type="button"
-              onClick={loadPeople}
-            >
-              المحاولة مرة أخرى
-            </button>
-
           </div>
-        )}
+        ) : (
+          <div className="people-grid">
+            {filteredPeople.map(
+              (person) => {
+                const age =
+                  calculateAge(
+                    person.birth_date,
+                    person.death_date
+                  );
 
-        {!loading &&
-          !error &&
-          filteredPeople.length === 0 && (
-            <div className="people-state">
-
-              <div className="empty-icon">
-                ♙
-              </div>
-
-              <strong>
-                {search
-                  ? "لا توجد نتائج"
-                  : "لا يوجد أشخاص بعد"}
-              </strong>
-
-              <p>
-                {search
-                  ? "جرّب البحث باسم مختلف."
-                  : "لم تتم إضافة أفراد إلى العائلة بعد."}
-              </p>
-
-            </div>
-          )}
-
-        {!loading &&
-          !error &&
-          filteredPeople.length > 0 && (
-            <div className="people-grid">
-
-              {filteredPeople.map(
-                (item) => {
-                  const fullName =
-                    getFullName(item);
-
-                  const age =
-                    calculateAge(
-                      item.birth_date,
-                      item.death_date
-                    );
-
-                  const hasAccount =
-                    Boolean(
-                      item.account
-                    );
-
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`person-card ${
-                        item.death_date
-                          ? "person-card-deceased"
-                          : ""
-                      }`}
-                      onClick={() =>
-                        openPerson(item)
-                      }
-                    >
-
-                      <div className="person-card-top">
-
-                        <div className="person-photo">
-
-                          {item.photo_url ? (
-                            <img
-                              src={
-                                item.photo_url
-                              }
-                              alt={
-                                fullName
-                              }
-                            />
-                          ) : (
-                            <span>
-                              {getInitial(
-                                item
-                              )}
-                            </span>
+                return (
+                  <button
+                    type="button"
+                    className="person-card"
+                    key={person.id}
+                    onClick={() =>
+                      openPerson(
+                        person
+                      )
+                    }
+                  >
+                    <div className="person-avatar">
+                      {person.photo_url ? (
+                        <img
+                          src={
+                            person.photo_url
+                          }
+                          alt={getFullName(
+                            person
                           )}
-
-                        </div>
-
-                        {hasAccount && (
-                          <span className="account-badge">
-                            حساب
-                          </span>
-                        )}
-
-                      </div>
-
-                      <div className="person-card-info">
-
-                        <h2>
-                          {fullName}
-                        </h2>
-
-                        <span className="person-gender">
-                          {item.gender ===
-                          "male"
-                            ? "ذكر"
-                            : "أنثى"}
+                        />
+                      ) : (
+                        <span>
+                          {getInitial(
+                            person
+                          )}
                         </span>
+                      )}
+                    </div>
 
-                        {item.birth_date && (
-                          <div className="person-meta">
-
-                            <span>
-                              الميلاد
-                            </span>
-
-                            <strong>
-                              {formatDate(
-                                item.birth_date
-                              )}
-                            </strong>
-
-                          </div>
+                    <div className="person-card-info">
+                      <h3>
+                        {getFullName(
+                          person
                         )}
+                      </h3>
 
-                        {age !== null && (
-                          <div className="person-age">
-                            {item.death_date
-                              ? `العمر عند الوفاة: ${age} سنة`
-                              : `العمر: ${age} سنة`}
-                          </div>
-                        )}
-
-                      </div>
-
-                      <span className="person-card-arrow">
-                        ←
+                      <span>
+                        {person.gender ===
+                        "male"
+                          ? "ذكر"
+                          : "أنثى"}
                       </span>
 
-                    </button>
-                  );
-                }
-              )}
-
-            </div>
-          )}
-
-      </section>
-
-      {/*
-      =====================================================
-      MODAL إضافة شخص
-      =====================================================
-      */}
-
-      {personModalOpen && (
-        <div
-          className="person-modal-backdrop"
-          onMouseDown={(event) => {
-            if (
-              event.target ===
-              event.currentTarget
-            ) {
-              closePersonCreateModal();
-            }
-          }}
-        >
-
-          <section className="person-modal">
-
-            <button
-              type="button"
-              className="person-modal-close"
-              onClick={
-                closePersonCreateModal
+                      {age !== null && (
+                        <small>
+                          {person.death_date
+                            ? `العمر ${age} سنة`
+                            : `العمر ${age} سنة`}
+                        </small>
+                      )}
+                    </div>
+                  </button>
+                );
               }
-              aria-label="إغلاق"
-            >
-              ×
-            </button>
+            )}
+          </div>
+        )}
+      </div>
 
-            <div className="person-modal-head">
+      {/* =====================================================
+          CREATE PERSON MODAL
+      ===================================================== */}
 
-              <div className="person-modal-photo">
-                <span>
-                  {newFullName
-                    ?.trim()
-                    ?.charAt(0) || "؟"}
-                </span>
-              </div>
-
+      {showCreateModal && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={
+            closePersonCreateModal
+          }
+        >
+          <div
+            className="modal"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="modal-header">
               <div>
-
-                <span>
-                  إضافة جديد
-                </span>
-
                 <h2>
                   إضافة شخص
                 </h2>
 
+                <p>
+                  أدخل بيانات الشخص الأساسية.
+                </p>
               </div>
 
+              <button
+                type="button"
+                className="close-button"
+                onClick={
+                  closePersonCreateModal
+                }
+              >
+                ×
+              </button>
             </div>
 
             <form
               onSubmit={createPerson}
             >
-
-              <div
-                className="person-create-info"
-                style={{
-                  marginBottom:
-                    "18px",
-                  padding:
-                    "14px 16px",
-                  borderRadius:
-                    "16px",
-                  background:
-                    "#f7f5f1",
-                  color:
-                    "#555",
-                  lineHeight:
-                    "1.8",
-                  fontSize:
-                    "14px",
-                }}
-              >
-                اكتب اسم الشخص كاملًا بالترتيب.
-                <br />
-                سيستخدم النظام الأسماء التي بعد
-                الاسم الأول لبناء سلسلة الأب والجد
-                وما بعدهما.
-              </div>
-
-              <label
-                style={{
-                  display:
-                    "block",
-                  marginBottom:
-                    "16px",
-                }}
-              >
-                <span
-                  style={{
-                    display:
-                      "block",
-                    marginBottom:
-                      "8px",
-                    fontWeight:
-                      700,
-                  }}
-                >
+              <div className="form-group">
+                <label>
                   الاسم الكامل
-                </span>
+                </label>
 
                 <input
-                  type="text"
                   value={
-                    newFullName
+                    createForm.full_name
                   }
-                  onChange={(
-                    event
-                  ) =>
-                    setNewFullName(
-                      event.target
-                        .value
+                  onChange={(event) =>
+                    setCreateForm(
+                      (current) => ({
+                        ...current,
+                        full_name:
+                          event.target
+                            .value,
+                      })
                     )
                   }
-                  placeholder="مثال: محمد حلمي محمد حسين عبدالله العريفي"
-                  autoFocus
-                  dir="rtl"
-                  disabled={
-                    creatingPerson
-                  }
-                  style={{
-                    width:
-                      "100%",
-                    padding:
-                      "14px 16px",
-                    border:
-                      "1px solid #ddd",
-                    borderRadius:
-                      "14px",
-                    outline:
-                      "none",
-                    background:
-                      "#fff",
-                  }}
+                  placeholder="مثال: محمد أحمد علي"
+                  required
                 />
-              </label>
 
-              <label
-                style={{
-                  display:
-                    "block",
-                  marginBottom:
-                    "18px",
-                }}
-              >
-                <span
-                  style={{
-                    display:
-                      "block",
-                    marginBottom:
-                      "8px",
-                    fontWeight:
-                      700,
-                  }}
-                >
-                  الجنس
-                </span>
+                <small>
+                  سيستخدم النظام الاسم لبناء
+                  تسلسل الأب والجد وما بعدهما.
+                </small>
+              </div>
 
-                <select
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>
+                    الجنس
+                  </label>
+
+                  <select
+                    value={
+                      createForm.gender
+                    }
+                    onChange={(event) =>
+                      setCreateForm(
+                        (current) => ({
+                          ...current,
+                          gender:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                  >
+                    <option value="male">
+                      ذكر
+                    </option>
+
+                    <option value="female">
+                      أنثى
+                    </option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    تاريخ الميلاد
+                  </label>
+
+                  <input
+                    type="date"
+                    value={
+                      createForm.birth_date
+                    }
+                    onChange={(event) =>
+                      setCreateForm(
+                        (current) => ({
+                          ...current,
+                          birth_date:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>
+                    مكان الميلاد
+                  </label>
+
+                  <input
+                    value={
+                      createForm.birth_place
+                    }
+                    onChange={(event) =>
+                      setCreateForm(
+                        (current) => ({
+                          ...current,
+                          birth_place:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    تاريخ الوفاة
+                  </label>
+
+                  <input
+                    type="date"
+                    value={
+                      createForm.death_date
+                    }
+                    onChange={(event) =>
+                      setCreateForm(
+                        (current) => ({
+                          ...current,
+                          death_date:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  مكان الوفاة
+                </label>
+
+                <input
                   value={
-                    newGender
+                    createForm.death_place
                   }
-                  onChange={(
-                    event
-                  ) =>
-                    setNewGender(
-                      event.target
-                        .value
+                  onChange={(event) =>
+                    setCreateForm(
+                      (current) => ({
+                        ...current,
+                        death_place:
+                          event.target
+                            .value,
+                      })
                     )
                   }
-                  disabled={
-                    creatingPerson
+                />
+              </div>
+
+              <div className="form-group">
+                <label>
+                  نبذة
+                </label>
+
+                <textarea
+                  rows="4"
+                  value={
+                    createForm.bio
                   }
-                  style={{
-                    width:
-                      "100%",
-                    padding:
-                      "14px 16px",
-                    border:
-                      "1px solid #ddd",
-                    borderRadius:
-                      "14px",
-                    outline:
-                      "none",
-                    background:
-                      "#fff",
-                  }}
-                >
-                  <option value="male">
-                    ذكر
-                  </option>
-
-                  <option value="female">
-                    أنثى
-                  </option>
-                </select>
-              </label>
-
-              {newFullName
-                .trim() && (
-                <div
-                  style={{
-                    marginBottom:
-                      "18px",
-                    padding:
-                      "16px",
-                    borderRadius:
-                      "16px",
-                    background:
-                      "#f7f5f1",
-                  }}
-                >
-                  <strong
-                    style={{
-                      display:
-                        "block",
-                      marginBottom:
-                        "10px",
-                    }}
-                  >
-                    معاينة سلسلة النسب
-                  </strong>
-
-                  <div
-                    style={{
-                      display:
-                        "flex",
-                      flexDirection:
-                        "column",
-                      gap:
-                        "7px",
-                    }}
-                  >
-                    {newFullName
-                      .trim()
-                      .replace(
-                        /\s+/g,
-                        " "
-                      )
-                      .split(" ")
-                      .filter(Boolean)
-                      .map(
-                        (
-                          part,
-                          index
-                        ) => (
-                          <div
-                            key={`${part}-${index}`}
-                            style={{
-                              display:
-                                "flex",
-                              alignItems:
-                                "center",
-                              gap:
-                                "8px",
-                            }}
-                          >
-                            <strong>
-                              {
-                                part
-                              }
-                            </strong>
-
-                            {index <
-                              newFullName
-                                .trim()
-                                .replace(
-                                  /\s+/g,
-                                  " "
-                                )
-                                .split(
-                                  " "
-                                )
-                                .filter(
-                                  Boolean
-                                )
-                                .length -
-                                1 && (
-                              <span
-                                style={{
-                                  color:
-                                    "#999",
-                                }}
-                              >
-                                ↓
-                              </span>
-                            )}
-
-                          </div>
-                        )
-                      )}
-                  </div>
-                </div>
-              )}
-
-              {personCreateError && (
-                <div
-                  className="account-form-error"
-                >
-                  {
-                    personCreateError
+                  onChange={(event) =>
+                    setCreateForm(
+                      (current) => ({
+                        ...current,
+                        bio: event.target
+                          .value,
+                      })
+                    )
                   }
+                />
+              </div>
+
+              {createError && (
+                <div className="error-box">
+                  {createError}
                 </div>
               )}
 
-              {personCreateMessage && (
-                <div
-                  className="account-form-success"
-                  style={{
-                    marginBottom:
-                      "12px",
-                  }}
-                >
-                  {
-                    personCreateMessage
-                  }
-                </div>
-              )}
-
-              {createdAncestors.length >
-                0 && (
-                <div
-                  style={{
-                    marginBottom:
-                      "12px",
-                    padding:
-                      "12px 14px",
-                    borderRadius:
-                      "14px",
-                    background:
-                      "#f7f5f1",
-                    fontSize:
-                      "14px",
-                  }}
-                >
-                  <strong>
-                    تم إنشاء الآباء:
-                  </strong>
-
-                  <div
-                    style={{
-                      marginTop:
-                        "7px",
-                    }}
-                  >
-                    {createdAncestors
-                      .map(
-                        (
-                          item
-                        ) =>
-                          item.name
-                      )
-                      .join(
-                        " ← "
-                      )}
-                  </div>
-                </div>
-              )}
-
-              {reusedAncestors.length >
-                0 && (
-                <div
-                  style={{
-                    marginBottom:
-                      "12px",
-                    padding:
-                      "12px 14px",
-                    borderRadius:
-                      "14px",
-                    background:
-                      "#f7f5f1",
-                    fontSize:
-                      "14px",
-                  }}
-                >
-                  <strong>
-                    أشخاص موجودون مسبقًا:
-                  </strong>
-
-                  <div
-                    style={{
-                      marginTop:
-                        "7px",
-                    }}
-                  >
-                    {reusedAncestors
-                      .map(
-                        (
-                          item
-                        ) =>
-                          item.name
-                      )
-                      .join(
-                        "، "
-                      )}
-                  </div>
-                </div>
-              )}
-
-              <div className="account-form-actions">
-
+              <div className="modal-actions">
                 <button
                   type="button"
-                  className="account-cancel-button"
+                  className="secondary-button"
                   onClick={
                     closePersonCreateModal
                   }
                   disabled={
-                    creatingPerson
+                    createLoading
                   }
                 >
                   إلغاء
@@ -1214,61 +1131,62 @@ export default function PeopleClient({
 
                 <button
                   type="submit"
-                  className="account-submit-button"
+                  className="primary-button"
                   disabled={
-                    creatingPerson
+                    createLoading
                   }
                 >
-                  {creatingPerson
-                    ? "جاري بناء النسب..."
-                    : "إضافة وبناء النسب"}
+                  {createLoading
+                    ? "جاري الإضافة..."
+                    : "إضافة الشخص"}
                 </button>
-
               </div>
-
             </form>
-
-          </section>
-
+          </div>
         </div>
       )}
 
-      {/*
-      =====================================================
-      MODAL الشخص الموجود
-      =====================================================
-      */}
+      {/* =====================================================
+          PERSON DETAILS MODAL
+      ===================================================== */}
 
       {selectedPerson && (
         <div
-          className="person-modal-backdrop"
-          onMouseDown={(event) => {
-            if (
-              event.target ===
-              event.currentTarget
-            ) {
-              closePerson();
-            }
-          }}
+          className="modal-backdrop"
+          onMouseDown={
+            closePerson
+          }
         >
+          <div
+            className="modal person-details-modal"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="modal-header">
+              <div>
+                <h2>
+                  بيانات الشخص
+                </h2>
 
-          <section className="person-modal">
+                <p>
+                  التفاصيل الكاملة للشخص.
+                </p>
+              </div>
 
-            <button
-              type="button"
-              className="person-modal-close"
-              onClick={
-                closePerson
-              }
-              aria-label="إغلاق"
-            >
-              ×
-            </button>
+              <button
+                type="button"
+                className="close-button"
+                onClick={
+                  closePerson
+                }
+              >
+                ×
+              </button>
+            </div>
 
-            <div className="person-modal-head">
-
-              <div className="person-modal-photo">
-
+            <div className="person-details-top">
+              <div className="person-details-avatar">
                 {selectedPerson.photo_url ? (
                   <img
                     src={
@@ -1285,363 +1203,611 @@ export default function PeopleClient({
                     )}
                   </span>
                 )}
-
               </div>
 
               <div>
-
-                <span>
-                  {selectedPerson.gender ===
-                  "male"
-                    ? "ذكر"
-                    : "أنثى"}
-                </span>
-
                 <h2>
                   {getFullName(
                     selectedPerson
                   )}
                 </h2>
 
+                <p>
+                  {selectedPerson.gender ===
+                  "male"
+                    ? "ذكر"
+                    : "أنثى"}
+                </p>
               </div>
-
             </div>
 
-            <div className="person-details">
+            <div className="details-grid">
+              <div className="detail-item">
+                <span>
+                  تاريخ الميلاد
+                </span>
 
-              {selectedPerson.birth_date && (
-                <div className="detail-item">
+                <strong>
+                  {formatDate(
+                    selectedPerson.birth_date
+                  )}
+                </strong>
+              </div>
 
-                  <span>
-                    تاريخ الميلاد
-                  </span>
+              <div className="detail-item">
+                <span>
+                  العمر
+                </span>
 
-                  <strong>
-                    {formatDate(
-                      selectedPerson.birth_date
-                    )}
-                  </strong>
+                <strong>
+                  {calculateAge(
+                    selectedPerson.birth_date,
+                    selectedPerson.death_date
+                  ) ??
+                    "غير محدد"}{" "}
+                  {calculateAge(
+                    selectedPerson.birth_date,
+                    selectedPerson.death_date
+                  ) !== null
+                    ? "سنة"
+                    : ""}
+                </strong>
+              </div>
 
-                </div>
-              )}
+              <div className="detail-item">
+                <span>
+                  مكان الميلاد
+                </span>
 
-              {selectedPerson.death_date && (
-                <div className="detail-item">
+                <strong>
+                  {selectedPerson.birth_place ||
+                    "غير محدد"}
+                </strong>
+              </div>
 
-                  <span>
-                    تاريخ الوفاة
-                  </span>
+              <div className="detail-item">
+                <span>
+                  تاريخ الوفاة
+                </span>
 
-                  <strong>
-                    {formatDate(
-                      selectedPerson.death_date
-                    )}
-                  </strong>
+                <strong>
+                  {formatDate(
+                    selectedPerson.death_date
+                  )}
+                </strong>
+              </div>
 
-                </div>
-              )}
+              <div className="detail-item">
+                <span>
+                  مكان الوفاة
+                </span>
 
-              {calculateAge(
-                selectedPerson.birth_date,
-                selectedPerson.death_date
-              ) !== null && (
-                <div className="detail-item">
-
-                  <span>
-                    {selectedPerson.death_date
-                      ? "العمر عند الوفاة"
-                      : "العمر"}
-                  </span>
-
-                  <strong>
-                    {calculateAge(
-                      selectedPerson.birth_date,
-                      selectedPerson.death_date
-                    )}{" "}
-                    سنة
-                  </strong>
-
-                </div>
-              )}
-
-              {selectedPerson.birth_place && (
-                <div className="detail-item">
-
-                  <span>
-                    مكان الميلاد
-                  </span>
-
-                  <strong>
-                    {
-                      selectedPerson.birth_place
-                    }
-                  </strong>
-
-                </div>
-              )}
-
-              {selectedPerson.death_place && (
-                <div className="detail-item">
-
-                  <span>
-                    مكان الوفاة
-                  </span>
-
-                  <strong>
-                    {
-                      selectedPerson.death_place
-                    }
-                  </strong>
-
-                </div>
-              )}
-
+                <strong>
+                  {selectedPerson.death_place ||
+                    "غير محدد"}
+                </strong>
+              </div>
             </div>
 
             {selectedPerson.bio && (
-              <div className="person-bio">
-
-                <span>
+              <div className="bio-section">
+                <h3>
                   نبذة
-                </span>
+                </h3>
 
                 <p>
                   {selectedPerson.bio}
                 </p>
-
               </div>
             )}
 
-            <div className="person-account-section">
+            {isEditor && (
+              <div className="editor-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() =>
+                    openEditModal(
+                      selectedPerson
+                    )
+                  }
+                >
+                  تعديل البيانات
+                </button>
 
-              <div className="person-account-heading">
-
-                <div>
-
-                  <span>
-                    الحساب
-                  </span>
-
-                  <h3>
-                    حساب الدخول
-                  </h3>
-
-                </div>
-
-                {selectedPerson.account && (
-                  <span className="account-status">
-                    {selectedPerson.account.is_active
-                      ? "مفعّل"
-                      : "غير مفعّل"}
-                  </span>
-                )}
-
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={() =>
+                    deletePerson(
+                      selectedPerson
+                    )
+                  }
+                  disabled={
+                    deleteLoading
+                  }
+                >
+                  {deleteLoading
+                    ? "جاري الحذف..."
+                    : "حذف الشخص"}
+                </button>
               </div>
+            )}
 
-              {selectedPerson.account ? (
-                <div className="existing-account">
-
-                  <div className="existing-account-icon">
-                    ✓
-                  </div>
-
-                  <div>
-
-                    <span>
-                      اسم المستخدم
-                    </span>
-
-                    <strong dir="ltr">
-                      {
-                        selectedPerson
-                          .account
-                          .username
-                      }
-                    </strong>
-
-                  </div>
-
-                </div>
-              ) : isEditor ? (
-                <div>
-
-                  {!accountModalOpen ? (
-                    <button
-                      type="button"
-                      className="create-account-button"
-                      onClick={
-                        openAccountModal
-                      }
-                    >
-                      إنشاء حساب لهذا الشخص
-                    </button>
-                  ) : (
-                    <form
-                      className="account-form"
-                      onSubmit={
-                        createPersonAccount
-                      }
-                    >
-
-                      <div className="account-form-title">
-                        إنشاء حساب دخول
-                      </div>
-
-                      <label>
-                        <span>
-                          اسم المستخدم
-                        </span>
-
-                        <input
-                          type="text"
-                          value={
-                            username
-                          }
-                          onChange={(
-                            event
-                          ) =>
-                            setUsername(
-                              event.target
-                                .value
-                            )
-                          }
-                          placeholder="مثال: ahmed1998"
-                          autoComplete="off"
-                          dir="ltr"
-                          disabled={
-                            creatingAccount
-                          }
-                        />
-                      </label>
-
-                      <label>
-                        <span>
-                          كلمة المرور
-                        </span>
-
-                        <input
-                          type="password"
-                          value={
-                            password
-                          }
-                          onChange={(
-                            event
-                          ) =>
-                            setPassword(
-                              event.target
-                                .value
-                            )
-                          }
-                          placeholder="8 أحرف على الأقل"
-                          autoComplete="new-password"
-                          dir="ltr"
-                          disabled={
-                            creatingAccount
-                          }
-                        />
-                      </label>
-
-                      <label>
-                        <span>
-                          تأكيد كلمة المرور
-                        </span>
-
-                        <input
-                          type="password"
-                          value={
-                            confirmPassword
-                          }
-                          onChange={(
-                            event
-                          ) =>
-                            setConfirmPassword(
-                              event.target
-                                .value
-                            )
-                          }
-                          placeholder="أعد كتابة كلمة المرور"
-                          autoComplete="new-password"
-                          dir="ltr"
-                          disabled={
-                            creatingAccount
-                          }
-                        />
-                      </label>
-
-                      {accountError && (
-                        <div className="account-form-error">
-                          {
-                            accountError
-                          }
-                        </div>
-                      )}
-
-                      {accountMessage && (
-                        <div className="account-form-success">
-                          {
-                            accountMessage
-                          }
-                        </div>
-                      )}
-
-                      <div className="account-form-actions">
-
-                        <button
-                          type="button"
-                          className="account-cancel-button"
-                          onClick={
-                            closeAccountModal
-                          }
-                          disabled={
-                            creatingAccount
-                          }
-                        >
-                          إلغاء
-                        </button>
-
-                        <button
-                          type="submit"
-                          className="account-submit-button"
-                          disabled={
-                            creatingAccount
-                          }
-                        >
-                          {creatingAccount
-                            ? "جاري إنشاء الحساب..."
-                            : "إنشاء الحساب"}
-                        </button>
-
-                      </div>
-
-                    </form>
-                  )}
-
-                </div>
-              ) : (
-                <div className="no-account-message">
-                  لا يوجد حساب دخول مرتبط بهذا الشخص.
-                </div>
-              )}
-
-            </div>
-
-            <div className="person-modal-actions">
+            <div className="person-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  openAccountModal(
+                    selectedPerson
+                  )
+                }
+              >
+                إنشاء حساب
+              </button>
 
               <a
-                href={`/tree?person=${selectedPerson.id}`}
-                className="view-tree-button"
+                href={`/tree?person=${encodeURIComponent(
+                  selectedPerson.id
+                )}`}
+                className="primary-button"
               >
-                عرض في شجرة العائلة
-                <span>←</span>
+                عرض في الشجرة
               </a>
-
             </div>
-
-          </section>
-
+          </div>
         </div>
       )}
 
+      {/* =====================================================
+          EDIT PERSON MODAL
+      ===================================================== */}
+
+      {showEditModal && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={
+            closeEditModal
+          }
+        >
+          <div
+            className="modal"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="modal-header">
+              <div>
+                <h2>
+                  تعديل بيانات الشخص
+                </h2>
+
+                <p>
+                  يمكنك تعديل البيانات والصورة
+                  الشخصية.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="close-button"
+                onClick={
+                  closeEditModal
+                }
+              >
+                ×
+              </button>
+            </div>
+
+            <form
+              onSubmit={updatePerson}
+            >
+              <div className="photo-upload">
+                <div className="photo-preview">
+                  {editPhotoPreview ? (
+                    <img
+                      src={
+                        editPhotoPreview
+                      }
+                      alt="معاينة الصورة"
+                    />
+                  ) : (
+                    <span>
+                      {getInitial({
+                        first_name:
+                          editForm.full_name
+                            .trim()
+                            .split(/\s+/)[0],
+                      })}
+                    </span>
+                  )}
+                </div>
+
+                <div className="photo-upload-content">
+                  <label>
+                    الصورة الشخصية
+                  </label>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={
+                      handleEditPhotoChange
+                    }
+                  />
+
+                  <small>
+                    صورة واحدة، وبحد أقصى 5
+                    ميجابايت.
+                  </small>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  الاسم الكامل
+                </label>
+
+                <input
+                  value={
+                    editForm.full_name
+                  }
+                  onChange={(event) =>
+                    setEditForm(
+                      (current) => ({
+                        ...current,
+                        full_name:
+                          event.target
+                            .value,
+                      })
+                    )
+                  }
+                  required
+                />
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>
+                    الجنس
+                  </label>
+
+                  <select
+                    value={
+                      editForm.gender
+                    }
+                    onChange={(event) =>
+                      setEditForm(
+                        (current) => ({
+                          ...current,
+                          gender:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                  >
+                    <option value="male">
+                      ذكر
+                    </option>
+
+                    <option value="female">
+                      أنثى
+                    </option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    تاريخ الميلاد
+                  </label>
+
+                  <input
+                    type="date"
+                    value={
+                      editForm.birth_date
+                    }
+                    onChange={(event) =>
+                      setEditForm(
+                        (current) => ({
+                          ...current,
+                          birth_date:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>
+                    مكان الميلاد
+                  </label>
+
+                  <input
+                    value={
+                      editForm.birth_place
+                    }
+                    onChange={(event) =>
+                      setEditForm(
+                        (current) => ({
+                          ...current,
+                          birth_place:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    تاريخ الوفاة
+                  </label>
+
+                  <input
+                    type="date"
+                    value={
+                      editForm.death_date
+                    }
+                    onChange={(event) =>
+                      setEditForm(
+                        (current) => ({
+                          ...current,
+                          death_date:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  مكان الوفاة
+                </label>
+
+                <input
+                  value={
+                    editForm.death_place
+                  }
+                  onChange={(event) =>
+                    setEditForm(
+                      (current) => ({
+                        ...current,
+                        death_place:
+                          event.target
+                            .value,
+                      })
+                    )
+                  }
+                />
+              </div>
+
+              <div className="form-group">
+                <label>
+                  نبذة
+                </label>
+
+                <textarea
+                  rows="4"
+                  value={
+                    editForm.bio
+                  }
+                  onChange={(event) =>
+                    setEditForm(
+                      (current) => ({
+                        ...current,
+                        bio: event.target
+                          .value,
+                      })
+                    )
+                  }
+                />
+              </div>
+
+              {editError && (
+                <div className="error-box">
+                  {editError}
+                </div>
+              )}
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={
+                    closeEditModal
+                  }
+                  disabled={
+                    editLoading
+                  }
+                >
+                  إلغاء
+                </button>
+
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={
+                    editLoading
+                  }
+                >
+                  {editLoading
+                    ? "جاري الحفظ..."
+                    : "حفظ التعديلات"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          ACCOUNT MODAL
+      ===================================================== */}
+
+      {showAccountModal &&
+        accountPerson && (
+          <div
+            className="modal-backdrop"
+            onMouseDown={
+              closeAccountModal
+            }
+          >
+            <div
+              className="modal"
+              onMouseDown={(event) =>
+                event.stopPropagation()
+              }
+            >
+              <div className="modal-header">
+                <div>
+                  <h2>
+                    إنشاء حساب
+                  </h2>
+
+                  <p>
+                    إنشاء حساب للشخص:
+                    {" "}
+                    <strong>
+                      {getFullName(
+                        accountPerson
+                      )}
+                    </strong>
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="close-button"
+                  onClick={
+                    closeAccountModal
+                  }
+                >
+                  ×
+                </button>
+              </div>
+
+              <form
+                onSubmit={
+                  createPersonAccount
+                }
+              >
+                <div className="form-group">
+                  <label>
+                    اسم المستخدم
+                  </label>
+
+                  <input
+                    value={
+                      accountForm.username
+                    }
+                    onChange={(event) =>
+                      setAccountForm(
+                        (current) => ({
+                          ...current,
+                          username:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    كلمة المرور
+                  </label>
+
+                  <input
+                    type="password"
+                    value={
+                      accountForm.password
+                    }
+                    onChange={(event) =>
+                      setAccountForm(
+                        (current) => ({
+                          ...current,
+                          password:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    تأكيد كلمة المرور
+                  </label>
+
+                  <input
+                    type="password"
+                    value={
+                      accountForm.confirm_password
+                    }
+                    onChange={(event) =>
+                      setAccountForm(
+                        (current) => ({
+                          ...current,
+                          confirm_password:
+                            event.target
+                              .value,
+                        })
+                      )
+                    }
+                    required
+                  />
+                </div>
+
+                {accountError && (
+                  <div className="error-box">
+                    {accountError}
+                  </div>
+                )}
+
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={
+                      closeAccountModal
+                    }
+                    disabled={
+                      accountLoading
+                    }
+                  >
+                    إلغاء
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={
+                      accountLoading
+                    }
+                  >
+                    {accountLoading
+                      ? "جاري الإنشاء..."
+                      : "إنشاء الحساب"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
     </main>
   );
 }
