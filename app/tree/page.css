@@ -1,9 +1,23 @@
+/* =========================================================
+   PAGE
+========================================================= */
+
 .tree-page {
   position: relative;
+
   min-height: 100vh;
+
   overflow: hidden;
-  background: #f7f5f1;
-  color: #191919;
+
+  background:
+    radial-gradient(
+      circle at 50% 20%,
+      rgba(205, 187, 157, 0.13),
+      transparent 35%
+    ),
+    #f7f5f1;
+
+  color: #202020;
 }
 
 /* =========================================================
@@ -13,72 +27,80 @@
 .tree-header {
   position: relative;
   z-index: 20;
-  height: 86px;
+
+  height: 82px;
 
   display: flex;
   align-items: center;
   justify-content: space-between;
 
-  gap: 25px;
   padding: 0 30px;
 
-  border-bottom: 1px solid #e5e0d8;
+  border-bottom: 1px solid #e8e2d9;
 
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.93);
 
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(18px);
 }
 
 .tree-header-title {
   display: flex;
   align-items: center;
-  gap: 14px;
+
+  gap: 13px;
 }
 
 .tree-back {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
 
   display: flex;
   align-items: center;
   justify-content: center;
 
-  border: 1px solid #e2ddd5;
-  border-radius: 12px;
+  border: 1px solid #e1dbd2;
+  border-radius: 11px;
 
   background: #fff;
   color: #555;
 
   font-size: 20px;
 
-  transition: 0.18s ease;
+  text-decoration: none;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .tree-back:hover {
-  background: #f4f0e9;
-  color: #222;
+  background: #f5f1eb;
+  border-color: #cdbda7;
 }
 
 .tree-header-title span {
   display: block;
 
-  margin-bottom: 3px;
+  margin-bottom: 2px;
 
-  color: #a58a67;
+  color: #a38764;
 
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
 }
 
 .tree-header-title h1 {
   margin: 0;
-  font-size: 22px;
+
+  font-size: 21px;
+  font-weight: 800;
 }
 
 .tree-header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+
+  gap: 10px;
 }
 
 /* =========================================================
@@ -87,14 +109,15 @@
 
 .tree-search {
   position: relative;
-  width: 270px;
+
+  width: 260px;
 }
 
 .tree-search > span {
   position: absolute;
 
   top: 50%;
-  right: 14px;
+  right: 13px;
 
   z-index: 2;
 
@@ -102,32 +125,36 @@
 
   color: #999;
 
-  font-size: 19px;
+  font-size: 18px;
 }
 
 .tree-search input {
   width: 100%;
-  height: 43px;
+  height: 42px;
 
-  padding: 0 42px 0 14px;
+  padding:
+    0
+    40px
+    0
+    13px;
 
-  border: 1px solid #e1dcd4;
-  border-radius: 13px;
+  border: 1px solid #e1dbd2;
+  border-radius: 11px;
 
   outline: none;
 
   background: #fff;
   color: #222;
 
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .tree-search input:focus {
-  border-color: #bca98e;
+  border-color: #b9a17f;
 
   box-shadow:
     0 0 0 3px
-    rgba(188, 169, 142, 0.1);
+    rgba(185, 161, 127, 0.1);
 }
 
 .search-results {
@@ -141,35 +168,38 @@
 
   overflow: hidden;
 
-  border: 1px solid #e5e0d8;
-  border-radius: 14px;
+  border: 1px solid #e4ded5;
+  border-radius: 13px;
 
   background: #fff;
 
   box-shadow:
-    0 15px 40px
-    rgba(20, 20, 20, 0.12);
+    0 20px 45px
+    rgba(40, 30, 20, 0.12);
 }
 
 .search-results button {
   width: 100%;
-  min-height: 53px;
 
   display: flex;
   align-items: center;
 
-  gap: 10px;
+  gap: 9px;
 
-  padding: 8px 12px;
+  padding: 9px 11px;
 
   border: 0;
-  border-bottom: 1px solid #f0ece6;
+  border-bottom: 1px solid #f0ece7;
 
   background: #fff;
-  color: #333;
 
-  font-size: 12px;
+  color: #444;
+
   text-align: right;
+
+  font-size: 10px;
+
+  cursor: pointer;
 }
 
 .search-results button:last-child {
@@ -181,8 +211,8 @@
 }
 
 .search-avatar {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
 
   display: flex;
   align-items: center;
@@ -192,27 +222,30 @@
 
   border-radius: 50%;
 
-  background: #efe6d9;
-  color: #765d3c;
+  background: #eee5d8;
+  color: #765d3e;
 
+  font-size: 11px;
   font-weight: 800;
 }
 
 .tree-dashboard-link {
-  height: 43px;
+  height: 42px;
 
   display: flex;
   align-items: center;
 
-  padding: 0 16px;
+  padding: 0 15px;
 
-  border-radius: 13px;
+  border-radius: 11px;
 
-  background: #191919;
+  background: #1c1c1c;
   color: #fff;
 
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
+
+  text-decoration: none;
 }
 
 /* =========================================================
@@ -222,11 +255,11 @@
 .tree-toolbar {
   position: absolute;
 
-  z-index: 15;
+  top: 100px;
+  right: 27px;
+  left: 27px;
 
-  top: 103px;
-  right: 30px;
-  left: 30px;
+  z-index: 15;
 
   display: flex;
   align-items: center;
@@ -244,86 +277,85 @@
   display: flex;
   align-items: center;
 
-  gap: 7px;
+  gap: 6px;
 
-  padding: 9px 13px;
+  padding: 8px 11px;
 
-  border: 1px solid #e3ded6;
-  border-radius: 12px;
+  border: 1px solid #e3ddd4;
+  border-radius: 10px;
 
   background: rgba(255, 255, 255, 0.9);
 
   color: #999;
 
-  font-size: 10px;
+  font-size: 9px;
 
   box-shadow:
-    0 5px 20px
-    rgba(30, 25, 18, 0.04);
-
-  backdrop-filter: blur(10px);
+    0 6px 20px
+    rgba(40, 30, 20, 0.04);
 }
 
 .tree-info strong {
-  color: #222;
-  font-size: 13px;
+  color: #333;
+
+  font-size: 12px;
 }
 
 .tree-controls {
   display: flex;
   align-items: center;
 
-  gap: 4px;
+  gap: 3px;
 
-  padding: 4px;
+  padding: 3px;
 
-  border: 1px solid #e3ded6;
-  border-radius: 12px;
+  border: 1px solid #e3ddd4;
+  border-radius: 10px;
 
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.9);
 
   box-shadow:
-    0 5px 20px
-    rgba(30, 25, 18, 0.04);
-
-  backdrop-filter: blur(10px);
+    0 6px 20px
+    rgba(40, 30, 20, 0.04);
 }
 
 .tree-controls button {
-  min-width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 31px;
 
   border: 0;
-  border-radius: 9px;
+  border-radius: 7px;
 
   background: transparent;
   color: #444;
 
-  font-size: 18px;
+  font-size: 17px;
+
+  cursor: pointer;
 }
 
 .tree-controls button:hover {
-  background: #f4f0e9;
+  background: #f3eee7;
 }
 
 .tree-controls > span {
-  min-width: 46px;
+  min-width: 43px;
 
   color: #888;
 
-  font-size: 10px;
-
-  text-align: center;
+  font-size: 9px;
 
   direction: ltr;
+
+  text-align: center;
 }
 
 .tree-controls .reset-button {
-  margin-right: 4px;
+  width: auto;
 
-  padding: 0 10px;
+  padding: 0 9px;
 
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
 }
 
@@ -334,7 +366,7 @@
 .tree-viewport {
   position: absolute;
 
-  top: 86px;
+  top: 82px;
   right: 0;
   bottom: 0;
   left: 0;
@@ -344,17 +376,9 @@
   cursor: grab;
 
   touch-action: none;
-
-  background:
-    radial-gradient(
-      circle at 50% 35%,
-      rgba(205, 189, 165, 0.16),
-      transparent 38%
-    ),
-    #f7f5f1;
 }
 
-.tree-viewport:active {
+.tree-viewport.is-dragging {
   cursor: grabbing;
 }
 
@@ -364,20 +388,15 @@
   position: absolute;
   inset: 0;
 
-  opacity: 0.38;
+  opacity: 0.35;
 
   background-image:
-    linear-gradient(
-      rgba(120, 105, 85, 0.04) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      rgba(120, 105, 85, 0.04) 1px,
-      transparent 1px
+    radial-gradient(
+      rgba(110, 92, 69, 0.16) 0.7px,
+      transparent 0.7px
     );
 
-  background-size: 36px 36px;
+  background-size: 24px 24px;
 
   pointer-events: none;
 }
@@ -389,7 +408,7 @@
 .tree-canvas {
   position: absolute;
 
-  top: 45px;
+  top: 55px;
   left: 50%;
 
   width: 3000px;
@@ -407,30 +426,31 @@
 .tree-lines {
   position: absolute;
 
-  top: 0;
-  left: 50%;
+  inset: 0;
 
   width: 3000px;
   height: 2200px;
 
   overflow: visible;
 
-  transform: translateX(-50%);
+  z-index: 1;
 
   pointer-events: none;
-
-  z-index: 1;
 }
 
 .family-line {
   fill: none;
 
-  stroke: #b9a58b;
+  stroke: #b49d7c;
 
-  stroke-width: 3;
+  stroke-width: 2.8;
 
   stroke-linecap: round;
-  stroke-linejoin: round;
+
+  /*
+   * الخطوط ناعمة وليست هندسية.
+   */
+  vector-effect: non-scaling-stroke;
 }
 
 /* =========================================================
@@ -439,83 +459,91 @@
 
 .tree-nodes {
   position: absolute;
+
   inset: 0;
 
-  z-index: 2;
+  z-index: 3;
 }
 
 .family-tree-node {
   position: absolute;
 
-  width: 150px;
-  height: 88px;
+  width: 140px;
+  height: 140px;
 
   display: flex;
   align-items: center;
+  flex-direction: column;
 
-  gap: 10px;
-
-  padding: 10px 12px;
+  padding: 14px 10px 11px;
 
   transform: translateX(-50%);
 
-  border: 1px solid #dfd6ca;
-  border-radius: 16px;
+  border: 1px solid #ded5c8;
+
+  /*
+   * مربع بحواف دائرية.
+   */
+  border-radius: 24px;
 
   background:
-    rgba(255, 255, 255, 0.97);
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #fcfaf7 100%
+    );
 
   color: #222;
 
   box-shadow:
-    0 8px 24px
-    rgba(55, 43, 27, 0.07);
-
-  text-align: right;
+    0 8px 22px
+    rgba(63, 48, 30, 0.07);
 
   cursor: pointer;
 
   transition:
-    box-shadow 0.18s ease,
+    transform 0.18s ease,
     border-color 0.18s ease,
-    background 0.18s ease;
+    box-shadow 0.18s ease;
 }
 
 .family-tree-node:hover {
-  border-color: #bba487;
+  transform:
+    translateX(-50%)
+    translateY(-4px);
 
-  background: #fff;
+  border-color: #bda688;
 
   box-shadow:
-    0 12px 30px
-    rgba(55, 43, 27, 0.13);
+    0 15px 30px
+    rgba(63, 48, 30, 0.12);
 }
 
 .family-tree-node.current-person {
-  border-color: #a88a63;
+  border-color: #a68963;
 
   background:
     linear-gradient(
-      145deg,
-      #fff,
-      #f8f1e7
+      180deg,
+      #fffefa 0%,
+      #f8f0e5 100%
     );
 
   box-shadow:
     0 0 0 4px
-      rgba(168, 138, 99, 0.1),
-    0 12px 30px
-      rgba(55, 43, 27, 0.1);
+      rgba(166, 137, 99, 0.1),
+    0 13px 30px
+      rgba(63, 48, 30, 0.1);
 }
 
 .family-tree-node.selected-person {
-  border-color: #765d3c;
+  border-color: #795e3c;
 
   box-shadow:
     0 0 0 3px
-      rgba(118, 93, 60, 0.12),
-    0 12px 30px
-      rgba(55, 43, 27, 0.12);
+      rgba(121, 94, 60, 0.12),
+    0 14px 32px
+      rgba(63, 48, 30, 0.13);
 }
 
 /* =========================================================
@@ -523,26 +551,36 @@
 ========================================================= */
 
 .node-photo {
-  width: 50px;
-  height: 50px;
+  width: 72px;
+  height: 72px;
 
   display: flex;
   align-items: center;
   justify-content: center;
 
-  flex-shrink: 0;
-
   overflow: hidden;
 
-  border: 2px solid #eee5d8;
+  margin-bottom: 10px;
+
+  border: 3px solid #eee5d8;
+
   border-radius: 50%;
 
-  background: #eee5d8;
+  background:
+    linear-gradient(
+      145deg,
+      #f0e7da,
+      #e6d8c5
+    );
 
-  color: #765d3c;
+  color: #806648;
 
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 800;
+
+  box-shadow:
+    0 3px 8px
+    rgba(60, 45, 25, 0.08);
 }
 
 .node-photo img {
@@ -556,41 +594,39 @@
    NAME
 ========================================================= */
 
-.node-content {
-  min-width: 0;
-  flex: 1;
-}
-
-.node-content strong {
+.node-name {
   display: block;
+
+  max-width: 116px;
 
   overflow: hidden;
 
-  color: #252525;
+  color: #262626;
 
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
 
   line-height: 1.6;
 
+  text-align: center;
+
   text-overflow: ellipsis;
+
   white-space: nowrap;
 }
 
 .node-relation {
-  display: inline-flex;
+  margin-top: 4px;
 
-  margin-top: 5px;
-
-  padding: 3px 7px;
+  padding: 2px 7px;
 
   border-radius: 6px;
 
-  background: #f5efe7;
+  background: #f1e9dd;
 
-  color: #967a56;
+  color: #917552;
 
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 800;
 }
 
@@ -604,52 +640,50 @@
   top: 50%;
   left: 50%;
 
-  z-index: 5;
+  z-index: 10;
 
   display: flex;
   align-items: center;
-
   flex-direction: column;
 
-  gap: 9px;
+  gap: 8px;
 
-  transform: translate(-50%, -50%);
+  transform:
+    translate(-50%, -50%);
 
-  padding: 35px;
+  padding: 30px;
 
-  border: 1px solid #e4dfd7;
+  border: 1px solid #e3ddd4;
+
   border-radius: 20px;
 
   background:
-    rgba(255, 255, 255, 0.92);
+    rgba(255, 255, 255, 0.94);
 
   box-shadow:
-    0 20px 60px
-    rgba(30, 25, 18, 0.08);
+    0 20px 55px
+    rgba(40, 30, 20, 0.09);
 
   text-align: center;
-
-  backdrop-filter: blur(10px);
 }
 
 .tree-state strong {
-  color: #333;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .tree-state span {
   color: #999;
-  font-size: 11px;
+
+  font-size: 10px;
 }
 
 .tree-loader {
   width: 28px;
   height: 28px;
 
-  margin-bottom: 5px;
+  border: 3px solid #e8dfd2;
 
-  border: 3px solid #e7dfd4;
-  border-top-color: #947651;
+  border-top-color: #987a55;
 
   border-radius: 50%;
 
@@ -666,15 +700,15 @@
 .tree-state-error button {
   margin-top: 8px;
 
-  padding: 9px 14px;
+  padding: 8px 13px;
 
   border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
 
-  background: #191919;
+  background: #1d1d1d;
   color: #fff;
 
-  font-size: 11px;
+  font-size: 10px;
 }
 
 /* =========================================================
@@ -684,52 +718,56 @@
 .person-panel {
   position: fixed;
 
-  z-index: 60;
+  top: 105px;
+  bottom: 22px;
+  left: 22px;
 
-  top: 106px;
-  left: 25px;
-  bottom: 25px;
+  z-index: 50;
 
   width: 330px;
 
   overflow-y: auto;
 
-  padding: 30px 25px;
+  padding: 28px 24px;
 
-  border: 1px solid #e4ded5;
-  border-radius: 24px;
+  border: 1px solid #e3ddd4;
+
+  border-radius: 22px;
 
   background:
     rgba(255, 255, 255, 0.96);
 
   box-shadow:
-    0 20px 70px
-    rgba(30, 25, 18, 0.15);
+    0 22px 65px
+    rgba(40, 30, 20, 0.15);
 
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(18px);
 }
 
 .person-panel-close {
   position: absolute;
 
-  top: 15px;
-  left: 15px;
+  top: 13px;
+  left: 13px;
 
-  width: 34px;
-  height: 34px;
+  width: 33px;
+  height: 33px;
 
   border: 0;
-  border-radius: 10px;
 
-  background: #f5f1eb;
+  border-radius: 9px;
+
+  background: #f3eee7;
   color: #666;
 
-  font-size: 20px;
+  font-size: 19px;
+
+  cursor: pointer;
 }
 
 .person-panel-photo {
-  width: 90px;
-  height: 90px;
+  width: 88px;
+  height: 88px;
 
   display: flex;
   align-items: center;
@@ -737,14 +775,14 @@
 
   overflow: hidden;
 
-  margin-bottom: 20px;
+  margin-bottom: 17px;
 
   border-radius: 50%;
 
-  background: #eee5d8;
-  color: #765d3c;
+  background: #ebe1d3;
+  color: #795e3d;
 
-  font-size: 30px;
+  font-size: 29px;
   font-weight: 800;
 }
 
@@ -758,11 +796,11 @@
 .person-panel-label {
   display: block;
 
-  margin-bottom: 7px;
+  margin-bottom: 5px;
 
-  color: #a58a67;
+  color: #a38764;
 
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
 }
 
@@ -771,26 +809,24 @@
 
   padding-left: 20px;
 
-  color: #242424;
+  font-size: 21px;
 
-  font-size: 22px;
-
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .you-badge {
   display: inline-flex;
 
-  margin-top: 12px;
+  margin-top: 9px;
 
-  padding: 6px 9px;
+  padding: 5px 8px;
 
-  border-radius: 8px;
+  border-radius: 7px;
 
-  background: #f1f6f1;
-  color: #47724c;
+  background: #eef5ef;
+  color: #47734e;
 
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
 }
 
@@ -799,29 +835,27 @@
 
   grid-template-columns: 1fr 1fr;
 
-  gap: 9px;
+  gap: 8px;
 
-  margin-top: 25px;
+  margin-top: 22px;
 }
 
 .person-details > div {
-  padding: 12px;
+  padding: 10px;
 
-  border-radius: 12px;
+  border-radius: 10px;
 
   background: #faf8f5;
 }
 
-.person-details span,
-.person-bio > span,
-.person-relations-title {
+.person-details span {
   display: block;
 
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 
-  color: #a0a0a0;
+  color: #999;
 
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .person-details strong {
@@ -829,7 +863,7 @@
 
   color: #444;
 
-  font-size: 11px;
+  font-size: 10px;
 
   line-height: 1.6;
 }
@@ -847,18 +881,23 @@
 ========================================================= */
 
 .person-relations {
-  margin-top: 18px;
+  margin-top: 17px;
 
-  padding: 14px;
+  padding: 13px;
 
-  border-radius: 13px;
+  border-radius: 12px;
 
   background: #faf8f5;
 }
 
 .person-relations-title {
-  color: #a58a67;
+  display: block;
 
+  margin-bottom: 7px;
+
+  color: #a38764;
+
+  font-size: 9px;
   font-weight: 800;
 }
 
@@ -869,33 +908,31 @@
   align-items: center;
   justify-content: space-between;
 
-  gap: 10px;
+  gap: 8px;
 
-  margin-top: 8px;
+  margin-top: 6px;
 
-  padding: 10px 11px;
+  padding: 9px 10px;
 
   border: 1px solid #eee8df;
-  border-radius: 10px;
+
+  border-radius: 9px;
 
   background: #fff;
-  color: #444;
+
+  cursor: pointer;
 
   text-align: right;
 }
 
 .person-relation-item:hover {
-  background: #f8f4ee;
-
-  border-color: #d9ccb9;
+  background: #f7f3ed;
 }
 
 .person-relation-item span {
-  flex-shrink: 0;
+  color: #999;
 
-  color: #a0a0a0;
-
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .person-relation-item strong {
@@ -903,7 +940,7 @@
 
   color: #444;
 
-  font-size: 10px;
+  font-size: 9px;
 
   text-overflow: ellipsis;
 
@@ -917,47 +954,44 @@
 .person-children > span {
   display: block;
 
-  margin-bottom: 7px;
+  margin-bottom: 6px;
 
-  color: #a0a0a0;
+  color: #999;
 
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .person-children > div {
   display: flex;
-
   flex-direction: column;
 
-  gap: 6px;
+  gap: 5px;
 }
 
 .person-children button {
-  padding: 9px 10px;
+  padding: 8px 9px;
 
   border: 1px solid #eee8df;
-  border-radius: 9px;
+
+  border-radius: 8px;
 
   background: #fff;
+
   color: #555;
 
-  font-size: 10px;
+  font-size: 9px;
 
   text-align: right;
-}
 
-.person-children button:hover {
-  background: #f8f4ee;
-
-  border-color: #d9ccb9;
+  cursor: pointer;
 }
 
 .no-relations {
-  margin: 8px 0 0;
+  margin: 7px 0 0;
 
   color: #999;
 
-  font-size: 10px;
+  font-size: 9px;
 }
 
 /* =========================================================
@@ -965,13 +999,23 @@
 ========================================================= */
 
 .person-bio {
-  margin-top: 18px;
+  margin-top: 16px;
 
-  padding: 14px;
+  padding: 13px;
 
-  border-radius: 13px;
+  border-radius: 12px;
 
   background: #faf8f5;
+}
+
+.person-bio > span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #999;
+
+  font-size: 8px;
 }
 
 .person-bio p {
@@ -979,7 +1023,7 @@
 
   color: #666;
 
-  font-size: 11px;
+  font-size: 10px;
 
   line-height: 1.9;
 }
@@ -990,13 +1034,17 @@
 
 @media (max-width: 800px) {
   .tree-header {
-    height: 76px;
+    height: 75px;
 
-    padding: 0 16px;
+    padding: 0 15px;
+  }
+
+  .tree-header-title h1 {
+    font-size: 18px;
   }
 
   .tree-header-actions {
-    gap: 7px;
+    gap: 6px;
   }
 
   .tree-dashboard-link {
@@ -1004,80 +1052,39 @@
   }
 
   .tree-search {
-    width: 190px;
+    width: 180px;
   }
 
   .tree-toolbar {
     top: 91px;
 
-    right: 16px;
-    left: 16px;
+    right: 15px;
+    left: 15px;
   }
 
   .tree-viewport {
-    top: 76px;
+    top: 75px;
   }
 
   .tree-canvas {
     top: 75px;
   }
 
-  .family-tree-node {
-    width: 140px;
-    height: 82px;
-  }
-
-  .node-photo {
-    width: 44px;
-    height: 44px;
-  }
-
-  .node-content strong {
-    font-size: 12px;
-  }
-
   .person-panel {
     top: auto;
-
-    right: 12px;
-    bottom: 12px;
-    left: 12px;
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
 
     width: auto;
 
-    max-height: 70vh;
+    max-height: 72vh;
 
-    padding: 25px 20px;
-
-    border-radius: 22px;
-  }
-
-  .person-panel-photo {
-    width: 70px;
-    height: 70px;
-
-    margin-bottom: 13px;
-  }
-
-  .person-panel h2 {
-    font-size: 19px;
+    border-radius: 20px;
   }
 }
 
 @media (max-width: 520px) {
-  .tree-header-title h1 {
-    font-size: 18px;
-  }
-
-  .tree-header-title span {
-    font-size: 9px;
-  }
-
-  .tree-back {
-    width: 38px;
-    height: 38px;
-  }
-
   .tree-search {
     width: 145px;
   }
@@ -1085,15 +1092,7 @@
   .tree-search input {
     height: 38px;
 
-    padding-right: 36px;
-
     font-size: 10px;
-  }
-
-  .tree-controls {
-    transform: scale(0.9);
-
-    transform-origin: right center;
   }
 
   .tree-info {
