@@ -12,12 +12,17 @@ function getFullName(person) {
     .join(" ");
 }
 
+/* =========================================================
+   حساب العمر بالتقويم الميلادي
+========================================================= */
+
 function calculateAge(birthDate, deathDate) {
   if (!birthDate) {
     return null;
   }
 
   const birth = new Date(`${birthDate}T00:00:00`);
+
   const end = deathDate
     ? new Date(`${deathDate}T00:00:00`)
     : new Date();
@@ -39,8 +44,10 @@ function calculateAge(birthDate, deathDate) {
 
   if (
     monthDifference < 0 ||
-    (monthDifference === 0 &&
-      end.getDate() < birth.getDate())
+    (
+      monthDifference === 0 &&
+      end.getDate() < birth.getDate()
+    )
   ) {
     age--;
   }
@@ -48,27 +55,39 @@ function calculateAge(birthDate, deathDate) {
   return Math.max(age, 0);
 }
 
+/* =========================================================
+   التاريخ الميلادي بالأرقام
+   مثال: 14/10/1998
+========================================================= */
+
 function formatGregorianDate(date) {
   if (!date) {
     return null;
   }
 
-  const parsed = new Date(`${date}T00:00:00`);
+  const parts = String(date).split("-");
 
-  if (Number.isNaN(parsed.getTime())) {
+  if (parts.length !== 3) {
     return null;
   }
 
-  return parsed.toLocaleDateString(
-    "en-US",
-    {
-      calendar: "gregory",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }
-  );
+  const year = parts[0];
+  const month = parts[1];
+  const day = parts[2];
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return `${day.padStart(2, "0")}/${month.padStart(
+    2,
+    "0"
+  )}/${year}`;
 }
+
+/* =========================================================
+   بناء شبكة العلاقات
+========================================================= */
 
 function buildGraph(people, relationships) {
   const peopleMap = new Map(
@@ -326,6 +345,10 @@ export default function TreeClient({
   const currentPersonId =
     account?.person?.id;
 
+  /* =======================================================
+     تحميل الشجرة
+  ======================================================= */
+
   useEffect(() => {
     let cancelled = false;
 
@@ -397,6 +420,10 @@ export default function TreeClient({
     relationships,
   ]);
 
+  /* =======================================================
+     البحث
+  ======================================================= */
+
   const filteredPeople = useMemo(() => {
     const value =
       search.trim().toLowerCase();
@@ -413,6 +440,10 @@ export default function TreeClient({
       )
       .slice(0, 8);
   }, [people, search]);
+
+  /* =======================================================
+     التحكم
+  ======================================================= */
 
   function resetView() {
     setScale(0.8);
@@ -518,13 +549,21 @@ export default function TreeClient({
         event.pointerId
       );
     } catch {
-      // Ignore pointer release errors.
+      // تجاهل الخطأ
     }
   }
+
+  /* =======================================================
+     علاقة الشخص بالحساب الحالي
+  ======================================================= */
 
   function getRelationshipLabel(
     personId
   ) {
+    if (!currentPersonId) {
+      return null;
+    }
+
     const relation =
       relationships.find(
         (item) =>
@@ -568,6 +607,10 @@ export default function TreeClient({
 
     return null;
   }
+
+  /* =======================================================
+     خطوط العلاقات
+  ======================================================= */
 
   const nodeMap = new Map(
     graph.nodes.map((node) => [
@@ -992,10 +1035,10 @@ export default function TreeClient({
 
                           {!relationshipLabel &&
                             isCurrent && (
-                              <span className="node-relation">
-                                أنت
-                              </span>
-                            )}
+                            <span className="node-relation">
+                              أنت
+                            </span>
+                          )}
 
                         </div>
 
@@ -1010,6 +1053,10 @@ export default function TreeClient({
           )}
 
       </section>
+
+      {/* =====================================================
+          معلومات الشخص
+      ===================================================== */}
 
       {selectedPerson && (
         <aside className="person-panel">
@@ -1065,25 +1112,25 @@ export default function TreeClient({
           <div className="person-details">
 
             <div>
-              <span>الجنس</span>
+              <span>
+                الجنس
+              </span>
 
               <strong>
                 {selectedPerson.gender ===
                 "male"
-                  ? "Male"
-                  : "Female"}
+                  ? "ذكر"
+                  : "أنثى"}
               </strong>
             </div>
 
             {selectedPerson.birth_date && (
               <div>
                 <span>
-                  Birth date
+                  تاريخ الميلاد
                 </span>
 
-                <strong
-                  className="english-date"
-                >
+                <strong className="english-date">
                   {formatGregorianDate(
                     selectedPerson.birth_date
                   )}
@@ -1094,12 +1141,10 @@ export default function TreeClient({
             {selectedPerson.death_date && (
               <div>
                 <span>
-                  Death date
+                  تاريخ الوفاة
                 </span>
 
-                <strong
-                  className="english-date"
-                >
+                <strong className="english-date">
                   {formatGregorianDate(
                     selectedPerson.death_date
                   )}
@@ -1111,8 +1156,8 @@ export default function TreeClient({
               <div>
                 <span>
                   {selectedPerson.death_date
-                    ? "Age at death"
-                    : "Age"}
+                    ? "العمر عند الوفاة"
+                    : "العمر"}
                 </span>
 
                 <strong>
@@ -1120,7 +1165,7 @@ export default function TreeClient({
                     selectedPerson.birth_date,
                     selectedPerson.death_date
                   )}{" "}
-                  years
+                  سنة
                 </strong>
               </div>
             )}
@@ -1128,7 +1173,7 @@ export default function TreeClient({
             {selectedPerson.birth_place && (
               <div>
                 <span>
-                  Birth place
+                  مكان الميلاد
                 </span>
 
                 <strong>
@@ -1142,7 +1187,7 @@ export default function TreeClient({
             {selectedPerson.death_place && (
               <div>
                 <span>
-                  Death place
+                  مكان الوفاة
                 </span>
 
                 <strong>
@@ -1159,7 +1204,7 @@ export default function TreeClient({
             <div className="person-bio">
 
               <span>
-                Biography
+                نبذة
               </span>
 
               <p>
