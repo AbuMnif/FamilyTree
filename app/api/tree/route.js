@@ -42,6 +42,7 @@ export async function GET() {
           first_name,
           middle_name,
           last_name,
+          name_parts,
           gender,
           birth_date,
           death_date,
@@ -97,15 +98,15 @@ export async function GET() {
       );
     }
 
-    const people = peopleResult.data || [];
+    const people =
+      peopleResult.data || [];
 
     const peopleIds = new Set(
       people.map((person) => person.id)
     );
 
     /*
-     * Only return relationships between
-     * people belonging to this family.
+     * العلاقات التي تخص أفراد هذه العائلة فقط.
      */
     const relationships = (
       relationshipsResult.data || []
@@ -121,7 +122,19 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
+
+      /*
+       * نعيد جميع الأشخاص، بما فيهم النساء.
+       *
+       * TreeClient هو المسؤول عن جعل
+       * العرض الرئيسي للذكور فقط.
+       *
+       * السبب:
+       * نحتاج بيانات النساء عند فتح
+       * تفاصيل الرجل.
+       */
       people,
+
       relationships,
     });
   } catch (error) {
