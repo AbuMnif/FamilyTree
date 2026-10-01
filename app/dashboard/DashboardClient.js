@@ -7,6 +7,7 @@ export default function DashboardClient({ account }) {
   const [loggingOut, setLoggingOut] = useState(false);
 
   const person = account?.person;
+  const family = person?.family;
 
   const fullName = [
     person?.first_name,
@@ -16,8 +17,7 @@ export default function DashboardClient({ account }) {
     .filter(Boolean)
     .join(" ");
 
-  const familyName =
-    person?.family?.name || "العائلة";
+  const familyName = family?.name || "العائلة";
 
   const isEditor = account?.role === "editor";
 
@@ -67,7 +67,7 @@ export default function DashboardClient({ account }) {
 
             <div>
               <strong>شجرة العائلة</strong>
-              <span>Family Archive</span>
+              <span>{familyName}</span>
             </div>
           </div>
 
@@ -213,7 +213,7 @@ export default function DashboardClient({ account }) {
 
           <div className="header-title">
             <span>
-              لوحة التحكم
+              {familyName}
             </span>
 
             <h1>
@@ -248,7 +248,7 @@ export default function DashboardClient({ account }) {
             <div className="welcome-content">
 
               <span className="welcome-eyebrow">
-                أهلاً بك
+                أهلاً بك في {familyName}
               </span>
 
               <h2>
@@ -275,6 +275,7 @@ export default function DashboardClient({ account }) {
             <div className="section-heading">
               <div>
                 <span>الوصول السريع</span>
+
                 <h2>
                   ماذا تريد أن تفعل؟
                 </h2>
@@ -385,6 +386,7 @@ export default function DashboardClient({ account }) {
               <div className="section-heading">
                 <div>
                   <span>الإدارة</span>
+
                   <h2>
                     أدوات المحرر
                   </h2>
@@ -413,6 +415,7 @@ export default function DashboardClient({ account }) {
                 <span className="quick-arrow">
                   ←
                 </span>
+
               </a>
 
             </section>
@@ -426,7 +429,7 @@ export default function DashboardClient({ account }) {
             </div>
 
             <span>
-              شجرة العائلة
+              {familyName}
             </span>
 
           </section>
