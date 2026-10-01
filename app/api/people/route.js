@@ -76,22 +76,6 @@ function getPersonNameParts(person) {
 =========================================================
 FIND ANCESTOR
 =========================================================
-
-نبحث عن الأب الموجود بدل إنشاء نسخة جديدة.
-
-الأولوية:
-
-1. شخص له نفس الاسم تمامًا وكان مرتبطًا
-   بالفعل كأب للشخص الحالي.
-
-2. شخص اسمه مطابق تمامًا للاسم المطلوب
-   وكان أبوه هو الاسم التالي في السلسلة.
-
-3. شخص يحمل الاسم المطلوب كاسم منفرد.
-
-4. إذا لم نستطع تحديد شخص موجود بشكل آمن:
-   يتم إنشاء شخص جديد.
-=========================================================
 */
 
 async function findExistingAncestor({
@@ -114,10 +98,6 @@ async function findExistingAncestor({
 
     const parts = getPersonNameParts(person);
 
-    /*
-      الاسم المفرد هو الشكل الذي ينشئه النظام
-      تلقائيًا للآباء الذين تم اكتشافهم.
-    */
     if (
       parts.length === 1 &&
       normalizeForCompare(parts[0]) ===
@@ -126,10 +106,6 @@ async function findExistingAncestor({
       return true;
     }
 
-    /*
-      كذلك نسمح بمطابقة الاسم الكامل إذا كان
-      الشخص مسجلًا مسبقًا ببيانات أكثر تفصيلًا.
-    */
     if (
       normalizeForCompare(buildFullName(person)) ===
       normalizedAncestor
@@ -137,25 +113,12 @@ async function findExistingAncestor({
       return true;
     }
 
-    /*
-      وأيضًا إذا كان الاسم المطلوب هو الاسم الأول
-      للشخص المسجل، نحتفظ به كمرشح فقط.
-      لا يتم اختياره إلا إذا دعمه سياق النسب.
-    */
     return false;
   });
 
   if (!candidates.length) {
     return null;
   }
-
-  /*
-  =======================================================
-  حالة مهمة:
-  إذا كان هذا الأب مرتبطًا بالفعل بالابن الحالي،
-  نعيد استخدامه مباشرة.
-  =======================================================
-  */
 
   const alreadyFather = candidates.find((candidate) =>
     relationships.some(
@@ -170,13 +133,6 @@ async function findExistingAncestor({
     return alreadyFather;
   }
 
-  /*
-  =======================================================
-  إذا كان هناك أكثر من مرشح، نحاول معرفة الأب
-  الصحيح من خلال الأب التالي في سلسلة النسب.
-  =======================================================
-  */
-
   if (
     candidates.length > 1 &&
     normalizedNextAncestor
@@ -186,8 +142,7 @@ async function findExistingAncestor({
         relationships.filter(
           (relationship) =>
             relationship.person_id === candidate.id &&
-            relationship.relationship_type ===
-              "father"
+            relationship.relationship_type === "father"
         );
 
       for (const fatherRelation of candidateFatherRelations) {
@@ -219,23 +174,133 @@ async function findExistingAncestor({
     }
   }
 
-  /*
-  =======================================================
-  إذا كان هناك شخص واحد فقط مطابق،
-  نعيد استخدامه.
-  =======================================================
-  */
-
   if (candidates.length === 1) {
     return candidates[0];
   }
 
-  /*
-    أكثر من شخص بنفس الاسم ولا يوجد سياق كافٍ
-    لتحديد الشخص الصحيح.
-    لا نخمن هنا.
-  */
   return null;
+}
+
+/*
+=========================================================
+UPLOAD PROFILE PHOTO
+=========================================================
+*/
+
+async function uploadProfilePhoto({
+  file,
+  familyId,
+  personId,
+}) {
+  if (!file) {
+    return null;
+  }
+
+  if (
+    typeof file.arrayBuffer !== "function" ||
+    !file.name
+  ) {
+    throw new Error("ملف الصورة غير صالح.");
+  }
+
+  if (!file.type?.startsWith("image/")) {
+    throw new Error(
+      "الملف المختار يجب أن يكون صورة."
+    );
+  }
+
+  const maxSize =
+    5 * 1024 * 1024;
+
+  if (file.size > maxSize) {
+    throw new Error(
+      "حجم الصورة يجب ألا يتجاوز 5 ميجابايت."
+    );
+  }
+
+  const extension =
+    file.name
+      .split(".")
+      .pop()
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "jpg";
+
+  const safeExtension =
+    extension || "jpg";
+
+  const filePath =
+    `${familyId}/${personId}/${Date.now()}-${cryptoRandomString(
+      8
+    )}.${safeExtension}`;
+
+  const arrayBuffer =
+    await file.arrayBuffer();
+
+  const buffer =
+    Buffer.from(arrayBuffer);
+
+  const {
+    error: uploadError,
+  } = await supabase.storage
+    .from("profile-photos")
+    .upload(
+      filePath,
+      buffer,
+      {
+        contentType:
+          file.type ||
+          "image/jpeg",
+        upsert: false,
+        cacheControl:
+          "3600",
+      }
+    );
+
+  if (uploadError) {
+    console.error(
+      "Profile photo upload error:",
+      uploadError
+    );
+
+    throw new Error(
+      "تعذر رفع الصورة."
+    );
+  }
+
+  const {
+    data: publicUrlData,
+  } =
+    supabase.storage
+      .from("profile-photos")
+      .getPublicUrl(filePath);
+
+  return (
+    publicUrlData?.publicUrl ||
+    null
+  );
+}
+
+function cryptoRandomString(length = 8) {
+  const chars =
+    "abcdefghijklmnopqrstuvwxyz0123456789";
+
+  let result = "";
+
+  for (
+    let index = 0;
+    index < length;
+    index++
+  ) {
+    result +=
+      chars[
+        Math.floor(
+          Math.random() *
+            chars.length
+        )
+      ];
+  }
+
+  return result;
 }
 
 /*
@@ -246,7 +311,8 @@ GET PEOPLE
 
 export async function GET() {
   try {
-    const account = await getCurrentAccount();
+    const account =
+      await getCurrentAccount();
 
     if (!account) {
       return NextResponse.json(
@@ -287,10 +353,6 @@ export async function GET() {
         ascending: true,
       });
 
-    /*
-      المحرر يستطيع مشاهدة جميع العائلات.
-      المستخدم العادي يرى عائلته فقط.
-    */
     if (account.role !== "editor") {
       const familyId =
         account?.person?.family_id;
@@ -312,7 +374,10 @@ export async function GET() {
       );
     }
 
-    const { data, error } = await query;
+    const {
+      data,
+      error,
+    } = await query;
 
     if (error) {
       console.error(
@@ -356,9 +421,10 @@ export async function GET() {
 PATCH
 =========================================================
 
-تعديل بيانات شخص موجود.
+يدعم:
 
-المحرر فقط يستطيع تنفيذ العملية.
+1. JSON عادي لتعديل البيانات.
+2. FormData عند رفع صورة.
 =========================================================
 */
 
@@ -388,7 +454,56 @@ export async function PATCH(request) {
       );
     }
 
-    const body = await request.json();
+    const contentType =
+      request.headers.get(
+        "content-type"
+      ) || "";
+
+    let body = {};
+    let uploadedPhoto = null;
+
+    if (
+      contentType.includes(
+        "multipart/form-data"
+      )
+    ) {
+      const formData =
+        await request.formData();
+
+      body = {
+        personId:
+          formData.get("personId"),
+        fullName:
+          formData.get("fullName"),
+        gender:
+          formData.get("gender"),
+        birth_date:
+          formData.get("birth_date"),
+        death_date:
+          formData.get("death_date"),
+        birth_place:
+          formData.get("birth_place"),
+        death_place:
+          formData.get("death_place"),
+        bio:
+          formData.get("bio"),
+      };
+
+      const photo =
+        formData.get("photo");
+
+      if (
+        photo &&
+        typeof photo.arrayBuffer ===
+          "function" &&
+        photo.size > 0
+      ) {
+        uploadedPhoto = photo;
+      }
+    } else {
+      body =
+        await request.json();
+    }
 
     const personId = String(
       body.personId || ""
@@ -470,10 +585,13 @@ export async function PATCH(request) {
     let nameParts;
 
     if (
-      typeof body.fullName === "string"
+      typeof body.fullName ===
+      "string"
     ) {
       const fullName =
-        normalizeName(body.fullName);
+        normalizeName(
+          body.fullName
+        );
 
       if (!fullName) {
         return NextResponse.json(
@@ -487,7 +605,9 @@ export async function PATCH(request) {
       }
 
       nameParts =
-        splitNameParts(fullName);
+        splitNameParts(
+          fullName
+        );
 
       if (!nameParts.length) {
         return NextResponse.json(
@@ -501,11 +621,15 @@ export async function PATCH(request) {
       }
     } else {
       nameParts =
-        getPersonNameParts(existingPerson);
+        getPersonNameParts(
+          existingPerson
+        );
     }
 
     const legacyFields =
-      buildLegacyFields(nameParts);
+      buildLegacyFields(
+        nameParts
+      );
 
     /*
     =====================================================
@@ -520,7 +644,8 @@ export async function PATCH(request) {
       body.gender === "male" ||
       body.gender === "female"
     ) {
-      gender = body.gender;
+      gender =
+        body.gender;
     }
 
     /*
@@ -530,13 +655,17 @@ export async function PATCH(request) {
     */
 
     const birthDate =
-      body.birth_date !== undefined
-        ? body.birth_date || null
+      body.birth_date !==
+      undefined
+        ? body.birth_date ||
+          null
         : existingPerson.birth_date;
 
     const deathDate =
-      body.death_date !== undefined
-        ? body.death_date || null
+      body.death_date !==
+      undefined
+        ? body.death_date ||
+          null
         : existingPerson.death_date;
 
     if (
@@ -557,46 +686,89 @@ export async function PATCH(request) {
 
     /*
     =====================================================
+    الصورة
+    =====================================================
+    */
+
+    let photoUrl =
+      existingPerson.photo_url;
+
+    if (uploadedPhoto) {
+      try {
+        photoUrl =
+          await uploadProfilePhoto({
+            file:
+              uploadedPhoto,
+            familyId:
+              existingPerson.family_id,
+            personId,
+          });
+      } catch (photoError) {
+        console.error(
+          "Profile photo error:",
+          photoError
+        );
+
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              photoError.message ||
+              "تعذر رفع الصورة.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    /*
+    =====================================================
     البيانات الأخرى
     =====================================================
     */
 
     const updateData = {
       ...legacyFields,
-      name_parts: nameParts,
+
+      name_parts:
+        nameParts,
+
       gender,
 
-      birth_date: birthDate,
+      birth_date:
+        birthDate,
 
-      death_date: deathDate,
+      death_date:
+        deathDate,
 
       birth_place:
-        body.birth_place !== undefined
+        body.birth_place !==
+        undefined
           ? String(
-              body.birth_place || ""
+              body.birth_place ||
+                ""
             ).trim() || null
           : existingPerson.birth_place,
 
       death_place:
-        body.death_place !== undefined
+        body.death_place !==
+        undefined
           ? String(
-              body.death_place || ""
+              body.death_place ||
+                ""
             ).trim() || null
           : existingPerson.death_place,
 
       bio:
-        body.bio !== undefined
+        body.bio !==
+        undefined
           ? String(
               body.bio || ""
             ).trim() || null
           : existingPerson.bio,
 
       photo_url:
-        body.photo_url !== undefined
-          ? String(
-              body.photo_url || ""
-            ).trim() || null
-          : existingPerson.photo_url,
+        photoUrl,
 
       updated_at:
         new Date().toISOString(),
@@ -608,21 +780,27 @@ export async function PATCH(request) {
     =====================================================
     */
 
-    const { data: familyPeople, error: familyPeopleError } =
-      await supabase
-        .from("people")
-        .select(`
-          id,
-          first_name,
-          middle_name,
-          last_name,
-          name_parts
-        `)
-        .eq(
-          "family_id",
-          existingPerson.family_id
-        )
-        .neq("id", personId);
+    const {
+      data: familyPeople,
+      error:
+        familyPeopleError,
+    } = await supabase
+      .from("people")
+      .select(`
+        id,
+        first_name,
+        middle_name,
+        last_name,
+        name_parts
+      `)
+      .eq(
+        "family_id",
+        existingPerson.family_id
+      )
+      .neq(
+        "id",
+        personId
+      );
 
     if (familyPeopleError) {
       console.error(
@@ -646,18 +824,24 @@ export async function PATCH(request) {
       );
 
     const duplicatePerson =
-      (familyPeople || []).find(
+      (
+        familyPeople || []
+      ).find(
         (person) =>
           normalizeForCompare(
-            buildFullName(person)
-          ) === normalizedEditedName
+            buildFullName(
+              person
+            )
+          ) ===
+          normalizedEditedName
       );
 
     if (duplicatePerson) {
       return NextResponse.json(
         {
           success: false,
-          code: "PERSON_EXISTS",
+          code:
+            "PERSON_EXISTS",
           message:
             "يوجد شخص آخر بهذا الاسم في العائلة.",
         },
@@ -673,11 +857,15 @@ export async function PATCH(request) {
 
     const {
       data: updatedPerson,
-      error: updateError,
+      error:
+        updateError,
     } = await supabase
       .from("people")
       .update(updateData)
-      .eq("id", personId)
+      .eq(
+        "id",
+        personId
+      )
       .select(`
         id,
         family_id,
@@ -723,7 +911,8 @@ export async function PATCH(request) {
       success: true,
       message:
         "تم تعديل بيانات الشخص بنجاح.",
-      person: updatedPerson,
+      person:
+        updatedPerson,
     });
   } catch (error) {
     console.error(
@@ -745,18 +934,6 @@ export async function PATCH(request) {
 /*
 =========================================================
 DELETE
-=========================================================
-
-يحذف الشخص المحدد فقط.
-
-لا نحذف الأب أو الأبناء أو بقية أفراد العائلة.
-
-قاعدة البيانات ستتعامل تلقائيًا مع:
-- العلاقات المرتبطة بالشخص
-- حسابه إن وجد
-- روابط الأرشيف الخاصة به
-
-أما ملف الأرشيف نفسه فلا يتم حذفه.
 =========================================================
 */
 
@@ -786,11 +963,35 @@ export async function DELETE(request) {
       );
     }
 
-    const body = await request.json();
+    let personId = "";
 
-    const personId = String(
-      body.personId || ""
-    ).trim();
+    const url =
+      new URL(
+        request.url
+      );
+
+    personId =
+      url.searchParams.get(
+        "id"
+      ) || "";
+
+    if (!personId) {
+      try {
+        const body =
+          await request.json();
+
+        personId = String(
+          body.personId || ""
+        ).trim();
+      } catch {
+        // لا يوجد body
+      }
+    }
+
+    personId =
+      String(
+        personId || ""
+      ).trim();
 
     if (!personId) {
       return NextResponse.json(
@@ -803,15 +1004,10 @@ export async function DELETE(request) {
       );
     }
 
-    /*
-    =====================================================
-    التحقق من الشخص قبل الحذف
-    =====================================================
-    */
-
     const {
       data: person,
-      error: personError,
+      error:
+        personError,
     } = await supabase
       .from("people")
       .select(`
@@ -823,7 +1019,10 @@ export async function DELETE(request) {
         name_parts,
         gender
       `)
-      .eq("id", personId)
+      .eq(
+        "id",
+        personId
+      )
       .maybeSingle();
 
     if (personError) {
@@ -853,18 +1052,16 @@ export async function DELETE(request) {
       );
     }
 
-    /*
-    =====================================================
-    حذف الشخص نفسه فقط
-    =====================================================
-    */
-
     const {
-      error: deleteError,
+      error:
+        deleteError,
     } = await supabase
       .from("people")
       .delete()
-      .eq("id", personId);
+      .eq(
+        "id",
+        personId
+      );
 
     if (deleteError) {
       console.error(
@@ -909,15 +1106,6 @@ export async function DELETE(request) {
 =========================================================
 POST
 =========================================================
-
-يدعم عمليتين:
-
-1. إنشاء حساب لشخص موجود
-   body.action = "create-account"
-
-2. إضافة شخص بالاسم الكامل وبناء سلسلة الآباء
-   body.action = "create-person"
-=========================================================
 */
 
 export async function POST(request) {
@@ -946,30 +1134,40 @@ export async function POST(request) {
       );
     }
 
-    const body = await request.json();
+    const body =
+      await request.json();
 
     const action = String(
-      body.action || "create-account"
+      body.action ||
+        "create-account"
     ).trim();
 
     /*
     =====================================================
-    إنشاء شخص بالاسم الكامل
+    إنشاء شخص
     =====================================================
     */
 
-    if (action === "create-person") {
-      const familyId = String(
-        body.familyId ||
-          account?.person?.family_id ||
-          ""
-      ).trim();
+    if (
+      action ===
+      "create-person"
+    ) {
+      const familyId =
+        String(
+          body.familyId ||
+            account?.person
+              ?.family_id ||
+            ""
+        ).trim();
 
       const fullName =
-        normalizeName(body.fullName);
+        normalizeName(
+          body.fullName
+        );
 
       const gender =
-        body.gender === "female"
+        body.gender ===
+        "female"
           ? "female"
           : "male";
 
@@ -996,7 +1194,9 @@ export async function POST(request) {
       }
 
       const nameParts =
-        splitNameParts(fullName);
+        splitNameParts(
+          fullName
+        );
 
       if (!nameParts.length) {
         return NextResponse.json(
@@ -1008,12 +1208,6 @@ export async function POST(request) {
           { status: 400 }
         );
       }
-
-      /*
-      =====================================================
-      تحميل الأشخاص الموجودين والعلاقات مرة واحدة
-      =====================================================
-      */
 
       const [
         existingPeopleResult,
@@ -1036,10 +1230,15 @@ export async function POST(request) {
             bio,
             photo_url
           `)
-          .eq("family_id", familyId),
+          .eq(
+            "family_id",
+            familyId
+          ),
 
         supabase
-          .from("relationships")
+          .from(
+            "relationships"
+          )
           .select(`
             id,
             person_id,
@@ -1048,7 +1247,9 @@ export async function POST(request) {
           `),
       ]);
 
-      if (existingPeopleResult.error) {
+      if (
+        existingPeopleResult.error
+      ) {
         console.error(
           "Existing people lookup error:",
           existingPeopleResult.error
@@ -1064,7 +1265,9 @@ export async function POST(request) {
         );
       }
 
-      if (relationshipsResult.error) {
+      if (
+        relationshipsResult.error
+      ) {
         console.error(
           "Relationships lookup error:",
           relationshipsResult.error
@@ -1081,33 +1284,33 @@ export async function POST(request) {
       }
 
       const existingPeople =
-        existingPeopleResult.data || [];
+        existingPeopleResult.data ||
+        [];
 
       const relationships =
-        relationshipsResult.data || [];
-
-      /*
-      =====================================================
-      منع الشخص الأساسي من التكرار
-      =====================================================
-      */
+        relationshipsResult.data ||
+        [];
 
       const normalizedFullName =
-        normalizeForCompare(fullName);
+        normalizeForCompare(
+          fullName
+        );
 
       const exactExistingPerson =
         existingPeople.find(
           (item) =>
             normalizeForCompare(
               buildFullName(item)
-            ) === normalizedFullName
+            ) ===
+            normalizedFullName
         );
 
       if (exactExistingPerson) {
         return NextResponse.json(
           {
             success: false,
-            code: "PERSON_EXISTS",
+            code:
+              "PERSON_EXISTS",
             message:
               "هذا الشخص موجود بالفعل في العائلة.",
             person:
@@ -1117,24 +1320,24 @@ export async function POST(request) {
         );
       }
 
-      /*
-      =====================================================
-      الشخص الأساسي
-      =====================================================
-      */
-
       const mainFields =
-        buildLegacyFields(nameParts);
+        buildLegacyFields(
+          nameParts
+        );
 
       const {
-        data: createdPerson,
-        error: createPersonError,
+        data:
+          createdPerson,
+        error:
+          createPersonError,
       } = await supabase
         .from("people")
         .insert({
-          family_id: familyId,
+          family_id:
+            familyId,
           ...mainFields,
-          name_parts: nameParts,
+          name_parts:
+            nameParts,
           gender,
         })
         .select(`
@@ -1154,7 +1357,9 @@ export async function POST(request) {
         `)
         .single();
 
-      if (createPersonError) {
+      if (
+        createPersonError
+      ) {
         console.error(
           "Create person error:",
           createPersonError
@@ -1170,76 +1375,43 @@ export async function POST(request) {
         );
       }
 
-      /*
-        نضيف الشخص الجديد لقائمة الأشخاص
-        حتى يمكن استخدامه في البحث أثناء
-        بناء سلسلة النسب.
-      */
-
       existingPeople.push(
         createdPerson
       );
 
-      /*
-      =====================================================
-      بناء سلسلة الآباء
-      =====================================================
-
-      مثال:
-
-      محمد
-      حلمي
-      محمد
-      حسين
-      عبدالله
-
-      محمد = الشخص الجديد
-      حلمي = الأب
-      محمد = الجد
-      حسين = جد الجد
-      ...
-      =====================================================
-      */
-
       let childPerson =
         createdPerson;
 
-      const createdAncestors = [];
-      const reusedAncestors = [];
+      const createdAncestors =
+        [];
+
+      const reusedAncestors =
+        [];
 
       for (
         let index = 1;
-        index < nameParts.length;
+        index <
+        nameParts.length;
         index++
       ) {
         const ancestorName =
           nameParts[index];
 
         const nextAncestorName =
-          nameParts[index + 1] || null;
-
-        /*
-        ===================================================
-        البحث عن الأب الموجود
-        ===================================================
-        */
+          nameParts[
+            index + 1
+          ] || null;
 
         let ancestor =
           await findExistingAncestor({
-            people: existingPeople,
+            people:
+              existingPeople,
             relationships,
             ancestorName,
             nextAncestorName,
             childPersonId:
               childPerson.id,
           });
-
-        /*
-        ===================================================
-        إذا لم نجد الأب:
-        ننشئه.
-        ===================================================
-        */
 
         if (!ancestor) {
           const ancestorFields =
@@ -1248,17 +1420,21 @@ export async function POST(request) {
             ]);
 
           const {
-            data: createdAncestor,
-            error: ancestorError,
+            data:
+              createdAncestor,
+            error:
+              ancestorError,
           } = await supabase
             .from("people")
             .insert({
-              family_id: familyId,
+              family_id:
+                familyId,
               ...ancestorFields,
               name_parts: [
                 ancestorName,
               ],
-              gender: "male",
+              gender:
+                "male",
             })
             .select(`
               id,
@@ -1277,18 +1453,13 @@ export async function POST(request) {
             `)
             .single();
 
-          if (ancestorError) {
+          if (
+            ancestorError
+          ) {
             console.error(
               "Create ancestor error:",
               ancestorError
             );
-
-            /*
-              نحذف الشخص الأساسي فقط.
-              والآباء الذين تم إنشاؤهم
-              في نفس العملية ستبقى إمكانية
-              تنظيفهم هنا حسب نجاح العملية.
-            */
 
             await supabase
               .from("people")
@@ -1312,39 +1483,27 @@ export async function POST(request) {
             createdAncestor;
 
           createdAncestors.push({
-            id: ancestor.id,
+            id:
+              ancestor.id,
             name:
               buildFullName(
                 ancestor
               ),
           });
 
-          /*
-            نضيف الأب الجديد إلى قائمة البحث
-            حتى لا ينشأ مرة أخرى أثناء نفس
-            العملية.
-          */
           existingPeople.push(
             ancestor
           );
         } else {
-          /*
-            الأب موجود مسبقًا.
-          */
           reusedAncestors.push({
-            id: ancestor.id,
+            id:
+              ancestor.id,
             name:
               buildFullName(
                 ancestor
               ),
           });
         }
-
-        /*
-        ===================================================
-        إنشاء العلاقة فقط إذا لم تكن موجودة
-        ===================================================
-        */
 
         const fatherRelationExists =
           relationships.some(
@@ -1371,7 +1530,9 @@ export async function POST(request) {
         const relationshipsToInsert =
           [];
 
-        if (!fatherRelationExists) {
+        if (
+          !fatherRelationExists
+        ) {
           relationshipsToInsert.push({
             person_id:
               childPerson.id,
@@ -1382,7 +1543,9 @@ export async function POST(request) {
           });
         }
 
-        if (!childRelationExists) {
+        if (
+          !childRelationExists
+        ) {
           relationshipsToInsert.push({
             person_id:
               ancestor.id,
@@ -1400,7 +1563,9 @@ export async function POST(request) {
             error:
               relationshipError,
           } = await supabase
-            .from("relationships")
+            .from(
+              "relationships"
+            )
             .insert(
               relationshipsToInsert
             );
@@ -1425,14 +1590,9 @@ export async function POST(request) {
             );
           }
 
-          /*
-            نضيف العلاقات للذاكرة الحالية
-            حتى تستخدمها الخطوات التالية.
-          */
-
           for (
-            const relation
-            of relationshipsToInsert
+            const relation of
+              relationshipsToInsert
           ) {
             relationships.push({
               id: null,
@@ -1440,11 +1600,6 @@ export async function POST(request) {
             });
           }
         }
-
-        /*
-          الآن الأب الحالي يصبح هو الابن
-          للخطوة التالية حتى نصل إلى الجد.
-        */
 
         childPerson =
           ancestor;
@@ -1463,25 +1618,29 @@ export async function POST(request) {
 
     /*
     =====================================================
-    إنشاء حساب لشخص موجود
+    إنشاء حساب
     =====================================================
     */
 
-    const personId = String(
-      body.personId || ""
-    ).trim();
+    const personId =
+      String(
+        body.personId || ""
+      ).trim();
 
-    const username = String(
-      body.username || ""
-    ).trim();
+    const username =
+      String(
+        body.username || ""
+      ).trim();
 
-    const password = String(
-      body.password || ""
-    );
+    const password =
+      String(
+        body.password || ""
+      );
 
     const confirmPassword =
       String(
-        body.confirmPassword || ""
+        body.confirmPassword ||
+          ""
       );
 
     if (!personId) {
@@ -1566,7 +1725,8 @@ export async function POST(request) {
     }
 
     if (
-      password !== confirmPassword
+      password !==
+      confirmPassword
     ) {
       return NextResponse.json(
         {
@@ -1580,7 +1740,8 @@ export async function POST(request) {
 
     const {
       data: person,
-      error: personError,
+      error:
+        personError,
     } = await supabase
       .from("people")
       .select(`
@@ -1591,7 +1752,10 @@ export async function POST(request) {
         last_name,
         name_parts
       `)
-      .eq("id", personId)
+      .eq(
+        "id",
+        personId
+      )
       .maybeSingle();
 
     if (personError) {
@@ -1622,7 +1786,8 @@ export async function POST(request) {
     }
 
     const {
-      data: existingPersonAccount,
+      data:
+        existingPersonAccount,
       error:
         existingPersonAccountError,
     } = await supabase
@@ -1654,7 +1819,9 @@ export async function POST(request) {
       );
     }
 
-    if (existingPersonAccount) {
+    if (
+      existingPersonAccount
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -1666,7 +1833,8 @@ export async function POST(request) {
     }
 
     const {
-      data: existingUsername,
+      data:
+        existingUsername,
       error:
         existingUsernameError,
     } = await supabase
@@ -1680,7 +1848,9 @@ export async function POST(request) {
       )
       .maybeSingle();
 
-    if (existingUsernameError) {
+    if (
+      existingUsernameError
+    ) {
       console.error(
         "Username lookup error:",
         existingUsernameError
@@ -1714,8 +1884,10 @@ export async function POST(request) {
       );
 
     const {
-      data: createdAccount,
-      error: createError,
+      data:
+        createdAccount,
+      error:
+        createError,
     } = await supabase
       .from("accounts")
       .insert({
