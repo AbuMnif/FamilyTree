@@ -3,6 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 function getFullName(person) {
+  if (
+    Array.isArray(person?.name_parts) &&
+    person.name_parts.length > 0
+  ) {
+    return person.name_parts
+      .filter(Boolean)
+      .join(" ");
+  }
+
   return [
     person?.first_name,
     person?.middle_name,
@@ -10,6 +19,21 @@ function getFullName(person) {
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function getFirstName(person) {
+  if (person?.first_name) {
+    return person.first_name;
+  }
+
+  if (
+    Array.isArray(person?.name_parts) &&
+    person.name_parts.length > 0
+  ) {
+    return person.name_parts[0];
+  }
+
+  return "غير معروف";
 }
 
 /* =========================================================
@@ -87,11 +111,20 @@ function formatGregorianDate(date) {
 
 /* =========================================================
    بناء شبكة العلاقات
+
+   الشجرة المرئية:
+   - الذكور فقط
+   - الأب فوق الابن
+   - الأم والزوجة والنساء لا يدخلن في الرسم
 ========================================================= */
 
 function buildGraph(people, relationships) {
+  const visiblePeople = people.filter(
+    (person) => person.gender === "male"
+  );
+
   const peopleMap = new Map(
-    people.map((person) => [
+    visiblePeople.map((person) => [
       person.id,
       person,
     ])
@@ -99,12 +132,10 @@ function buildGraph(people, relationships) {
 
   const parents = new Map();
   const children = new Map();
-  const spouses = new Map();
 
-  people.forEach((person) => {
+  visiblePeople.forEach((person) => {
     parents.set(person.id, new Set());
     children.set(person.id, new Set());
-    spouses.set(person.id, new Set());
   });
 
   relationships.forEach((relationship) => {
@@ -118,16 +149,24 @@ function buildGraph(people, relationships) {
       return;
     }
 
+    /*
+     * الأب:
+     * person_id هو الابن
+     * related_person_id هو الأب
+     */
     if (
       relationship.relationship_type ===
-        "father" ||
-      relationship.relationship_type ===
-        "mother"
+      "father"
     ) {
       parents.get(a)?.add(b);
       children.get(b)?.add(a);
     }
 
+    /*
+     * علاقة child:
+     * person_id هو الأب
+     * related_person_id هو الابن
+     */
     if (
       relationship.relationship_type ===
       "child"
@@ -135,16 +174,16 @@ function buildGraph(people, relationships) {
       children.get(a)?.add(b);
       parents.get(b)?.add(a);
     }
-
-    if (
-      relationship.relationship_type ===
-      "spouse"
-    ) {
-      spouses.get(a)?.add(b);
-      spouses.get(b)?.add(a);
-    }
   });
 
+  /*
+   * حساب مستوى كل شخص.
+   *
+   * الشخص الذي لا يملك أبًا ظاهرًا
+   * يبدأ من المستوى 0.
+   *
+   * الأب يكون دائمًا فوق الابن.
+   */
   const generation = new Map();
 
   function calculateGeneration(
@@ -181,68 +220,21 @@ function buildGraph(people, relationships) {
     const result =
       Math.max(...parentGenerations) + 1;
 
-    generation.set(personId, result);
+    generation.set(
+      personId,
+      result
+    );
 
     return result;
   }
 
-  people.forEach((person) => {
+  visiblePeople.forEach((person) => {
     calculateGeneration(person.id);
   });
 
-  let changed = true;
-
-  while (changed) {
-    changed = false;
-
-    people.forEach((person) => {
-      const current =
-        generation.get(person.id) || 0;
-
-      for (const spouseId of
-        spouses.get(person.id) || []) {
-        const spouseGeneration =
-          generation.get(spouseId) || 0;
-
-        if (
-          current !== spouseGeneration
-        ) {
-          const target = Math.max(
-            current,
-            spouseGeneration
-          );
-
-          if (
-            generation.get(person.id) !==
-            target
-          ) {
-            generation.set(
-              person.id,
-              target
-            );
-
-            changed = true;
-          }
-
-          if (
-            generation.get(spouseId) !==
-            target
-          ) {
-            generation.set(
-              spouseId,
-              target
-            );
-
-            changed = true;
-          }
-        }
-      }
-    });
-  }
-
   const generationGroups = new Map();
 
-  people.forEach((person) => {
+  visiblePeople.forEach((person) => {
     const level =
       generation.get(person.id) || 0;
 
@@ -421,7 +413,24 @@ export default function TreeClient({
   ]);
 
   /* =======================================================
+     خريطة الأشخاص
+  ======================================================= */
+
+  const peopleMap = useMemo(() => {
+    return new Map(
+      people.map((person) => [
+        person.id,
+        person,
+      ])
+    );
+  }, [people]);
+
+  /* =======================================================
      البحث
+
+     البحث يشمل جميع أفراد العائلة،
+     وليس الذكور فقط، حتى نستطيع الوصول
+     إلى المرأة من البحث عند الحاجة.
   ======================================================= */
 
   const filteredPeople = useMemo(() => {
@@ -440,6 +449,217 @@ export default function TreeClient({
       )
       .slice(0, 8);
   }, [people, search]);
+
+  /* =======================================================
+     العلاقات الخاصة بالشخص المحدد
+  ======================================================= */
+
+  const selectedRelations =
+    useMemo(() => {
+      if (!selectedPerson) {
+        return {
+          father: null,
+          mother: null,
+          spouse: null,
+          children: [],
+        };
+      }
+
+      let father = null;
+      let mother = null;
+      let spouse = null;
+
+      const children = [];
+
+      relationships.forEach(
+        (relationship) => {
+          const {
+            person_id,
+            related_person_id,
+            relationship_type,
+          } = relationship;
+
+          if (
+            relationship_type ===
+              "father" &&
+            person_id ===
+              selectedPerson.id
+          ) {
+            father =
+              peopleMap.get(
+                related_person_id
+              ) || null;
+          }
+
+          if (
+            relationship_type ===
+              "mother" &&
+            person_id ===
+              selectedPerson.id
+          ) {
+            mother =
+              peopleMap.get(
+                related_person_id
+              ) || null;
+          }
+
+          if (
+            relationship_type ===
+              "spouse" &&
+            person_id ===
+              selectedPerson.id
+          ) {
+            spouse =
+              peopleMap.get(
+                related_person_id
+              ) || null;
+          }
+
+          if (
+            relationship_type ===
+              "child" &&
+            person_id ===
+              selectedPerson.id
+          ) {
+            const child =
+              peopleMap.get(
+                related_person_id
+              );
+
+            if (child) {
+              children.push(child);
+            }
+          }
+        }
+      );
+
+      /*
+       * بعض البيانات قد تكون محفوظة
+       * بالاتجاه المعاكس، لذلك نبحث
+       * أيضًا من جهة related_person_id.
+       */
+
+      relationships.forEach(
+        (relationship) => {
+          const {
+            person_id,
+            related_person_id,
+            relationship_type,
+          } = relationship;
+
+          if (
+            related_person_id !==
+            selectedPerson.id
+          ) {
+            return;
+          }
+
+          if (
+            relationship_type ===
+              "father" &&
+            !father
+          ) {
+            father =
+              peopleMap.get(
+                person_id
+              ) || null;
+          }
+
+          if (
+            relationship_type ===
+              "mother" &&
+            !mother
+          ) {
+            mother =
+              peopleMap.get(
+                person_id
+              ) || null;
+          }
+
+          if (
+            relationship_type ===
+              "spouse" &&
+            !spouse
+          ) {
+            spouse =
+              peopleMap.get(
+                person_id
+              ) || null;
+          }
+
+          if (
+            relationship_type ===
+              "child"
+          ) {
+            const child =
+              peopleMap.get(
+                person_id
+              );
+
+            if (
+              child &&
+              !children.some(
+                (item) =>
+                  item.id === child.id
+              )
+            ) {
+              children.push(child);
+            }
+          }
+        }
+      );
+
+      /*
+       * لو كانت العلاقة محفوظة father:
+       * person_id = الابن
+       * related_person_id = الأب
+       *
+       * الأبناء يمكن أيضًا استنتاجهم
+       * من علاقات father.
+       */
+
+      relationships.forEach(
+        (relationship) => {
+          if (
+            relationship.relationship_type !==
+            "father"
+          ) {
+            return;
+          }
+
+          if (
+            relationship.related_person_id ===
+            selectedPerson.id
+          ) {
+            const child =
+              peopleMap.get(
+                relationship.person_id
+              );
+
+            if (
+              child &&
+              !children.some(
+                (item) =>
+                  item.id === child.id
+              )
+            ) {
+              children.push(child);
+            }
+          }
+        }
+      );
+
+      return {
+        father,
+        mother,
+        spouse,
+        children,
+      };
+    }, [
+      selectedPerson,
+      relationships,
+      peopleMap,
+    ]);
 
   /* =======================================================
      التحكم
@@ -610,6 +830,9 @@ export default function TreeClient({
 
   /* =======================================================
      خطوط العلاقات
+
+     لا نرسم إلا الذكور الموجودين
+     في الشجرة.
   ======================================================= */
 
   const nodeMap = new Map(
@@ -626,11 +849,7 @@ export default function TreeClient({
           relationship.relationship_type ===
             "father" ||
           relationship.relationship_type ===
-            "mother" ||
-          relationship.relationship_type ===
-            "child" ||
-          relationship.relationship_type ===
-            "spouse"
+            "child"
         );
       })
       .map((relationship) => {
@@ -712,9 +931,9 @@ export default function TreeClient({
                       }
                     >
                       <span className="search-avatar">
-                        {person.first_name?.charAt(
-                          0
-                        )}
+                        {getFirstName(
+                          person
+                        ).charAt(0)}
                       </span>
 
                       <span>
@@ -747,11 +966,11 @@ export default function TreeClient({
         <div className="tree-info">
 
           <strong>
-            {people.length}
+            {graph.nodes.length}
           </strong>
 
           <span>
-            شخصًا في الشجرة
+            رجلًا في الشجرة
           </span>
 
         </div>
@@ -847,11 +1066,11 @@ export default function TreeClient({
 
         {!loading &&
           !error &&
-          people.length === 0 && (
+          graph.nodes.length === 0 && (
             <div className="tree-state">
 
               <strong>
-                لا يوجد أشخاص حتى الآن
+                لا يوجد رجال في الشجرة حتى الآن
               </strong>
 
               <span>
@@ -863,7 +1082,7 @@ export default function TreeClient({
 
         {!loading &&
           !error &&
-          people.length > 0 && (
+          graph.nodes.length > 0 && (
             <div
               className="tree-canvas"
               style={{
@@ -887,45 +1106,38 @@ export default function TreeClient({
                     const {
                       from,
                       to,
-                      relationship_type,
-                    } =
-                      relationship;
+                    } = relationship;
+
+                    /*
+                     * العلاقة الأب -> الابن.
+                     *
+                     * في بعض الصفوف قد تكون
+                     * العلاقة محفوظة بالاتجاه
+                     * المعاكس، لذلك نحدد الأعلى
+                     * والأسفل اعتمادًا على y.
+                     */
+
+                    const top =
+                      from.y <= to.y
+                        ? from
+                        : to;
+
+                    const bottom =
+                      from.y <= to.y
+                        ? to
+                        : from;
 
                     const startX =
-                      from.x;
+                      top.x;
 
                     const startY =
-                      from.y + 112;
+                      top.y + 112;
 
                     const endX =
-                      to.x;
+                      bottom.x;
 
                     const endY =
-                      to.y;
-
-                    if (
-                      relationship_type ===
-                      "spouse"
-                    ) {
-                      const y =
-                        Math.min(
-                          from.y,
-                          to.y
-                        ) + 56;
-
-                      return (
-                        <line
-                          key={
-                            relationship.id
-                          }
-                          x1={startX}
-                          y1={y}
-                          x2={endX}
-                          y2={y}
-                          className="spouse-line"
-                        />
-                      );
-                    }
+                      bottom.y;
 
                     const middleY =
                       startY +
@@ -1009,9 +1221,9 @@ export default function TreeClient({
                             />
                           ) : (
                             <span>
-                              {person.first_name?.charAt(
-                                0
-                              )}
+                              {getFirstName(
+                                person
+                              ).charAt(0)}
                             </span>
                           )}
 
@@ -1020,7 +1232,7 @@ export default function TreeClient({
                         <div className="node-content">
 
                           <strong>
-                            {getFullName(
+                            {getFirstName(
                               person
                             )}
                           </strong>
@@ -1084,9 +1296,9 @@ export default function TreeClient({
               />
             ) : (
               <span>
-                {selectedPerson.first_name?.charAt(
-                  0
-                )}
+                {getFirstName(
+                  selectedPerson
+                ).charAt(0)}
               </span>
             )}
 
@@ -1196,6 +1408,121 @@ export default function TreeClient({
                   }
                 </strong>
               </div>
+            )}
+
+          </div>
+
+          {/* =================================================
+              العلاقات العائلية
+          ================================================= */}
+
+          <div className="person-relations">
+
+            <span className="person-relations-title">
+              العلاقات العائلية
+            </span>
+
+            {selectedRelations.father && (
+              <button
+                className="person-relation-item"
+                onClick={() =>
+                  selectPerson(
+                    selectedRelations.father
+                  )
+                }
+              >
+                <span>
+                  الأب
+                </span>
+
+                <strong>
+                  {getFullName(
+                    selectedRelations.father
+                  )}
+                </strong>
+              </button>
+            )}
+
+            {selectedRelations.mother && (
+              <button
+                className="person-relation-item"
+                onClick={() =>
+                  selectPerson(
+                    selectedRelations.mother
+                  )
+                }
+              >
+                <span>
+                  الأم
+                </span>
+
+                <strong>
+                  {getFullName(
+                    selectedRelations.mother
+                  )}
+                </strong>
+              </button>
+            )}
+
+            {selectedRelations.spouse && (
+              <button
+                className="person-relation-item"
+                onClick={() =>
+                  selectPerson(
+                    selectedRelations.spouse
+                  )
+                }
+              >
+                <span>
+                  الزوج / الزوجة
+                </span>
+
+                <strong>
+                  {getFullName(
+                    selectedRelations.spouse
+                  )}
+                </strong>
+              </button>
+            )}
+
+            {selectedRelations.children.length >
+              0 && (
+              <div className="person-children">
+
+                <span>
+                  الأبناء
+                </span>
+
+                <div>
+                  {selectedRelations.children.map(
+                    (child) => (
+                      <button
+                        key={child.id}
+                        onClick={() =>
+                          selectPerson(
+                            child
+                          )
+                        }
+                      >
+                        {getFullName(
+                          child
+                        )}
+                      </button>
+                    )
+                  )}
+                </div>
+
+              </div>
+            )}
+
+            {!selectedRelations.father &&
+              !selectedRelations.mother &&
+              !selectedRelations.spouse &&
+              selectedRelations.children.length ===
+                0 && (
+              <p className="no-relations">
+                لا توجد علاقات مسجلة لهذا الشخص.
+              </p>
             )}
 
           </div>
