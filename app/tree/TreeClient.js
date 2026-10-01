@@ -2,10 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
 function getFullName(person) {
   if (
     Array.isArray(person?.name_parts) &&
-    person.name_parts.length > 0
+    person.name_parts.length
   ) {
     return person.name_parts
       .filter(Boolean)
@@ -28,17 +32,13 @@ function getFirstName(person) {
 
   if (
     Array.isArray(person?.name_parts) &&
-    person.name_parts.length > 0
+    person.name_parts.length
   ) {
     return person.name_parts[0];
   }
 
   return "غير معروف";
 }
-
-/* =========================================================
-   حساب العمر بالتقويم الميلادي
-========================================================= */
 
 function calculateAge(birthDate, deathDate) {
   if (!birthDate) {
@@ -79,11 +79,6 @@ function calculateAge(birthDate, deathDate) {
   return Math.max(age, 0);
 }
 
-/* =========================================================
-   التاريخ الميلادي بالأرقام
-   مثال: 14/10/1998
-========================================================= */
-
 function formatGregorianDate(date) {
   if (!date) {
     return null;
@@ -95,98 +90,97 @@ function formatGregorianDate(date) {
     return null;
   }
 
-  const year = parts[0];
-  const month = parts[1];
-  const day = parts[2];
-
-  if (!year || !month || !day) {
-    return null;
-  }
-
-  return `${day.padStart(2, "0")}/${month.padStart(
+  return `${parts[2].padStart(2, "0")}/${parts[1].padStart(
     2,
     "0"
-  )}/${year}`;
+  )}/${parts[0]}`;
 }
 
 /* =========================================================
-   بناء شبكة العلاقات
+   BUILD FAMILY TREE
 
-   الشجرة المرئية:
-   - الذكور فقط
-   - الأب فوق الابن
-   - الأم والزوجة والنساء لا يدخلن في الرسم
+   الذكور فقط في الرسم.
+   الأب فوق الأبناء.
 ========================================================= */
 
 function buildGraph(people, relationships) {
-  const visiblePeople = people.filter(
+  const males = people.filter(
     (person) => person.gender === "male"
   );
 
   const peopleMap = new Map(
-    visiblePeople.map((person) => [
+    males.map((person) => [
       person.id,
       person,
     ])
   );
 
-  const parents = new Map();
-  const children = new Map();
+  const fatherOf = new Map();
+  const childrenOf = new Map();
 
-  visiblePeople.forEach((person) => {
-    parents.set(person.id, new Set());
-    children.set(person.id, new Set());
+  males.forEach((person) => {
+    childrenOf.set(
+      person.id,
+      []
+    );
   });
 
-  relationships.forEach((relationship) => {
-    const a = relationship.person_id;
-    const b = relationship.related_person_id;
+  relationships.forEach((relation) => {
+    const a = relation.person_id;
+    const b = relation.related_person_id;
 
     if (
-      !peopleMap.has(a) ||
-      !peopleMap.has(b)
+      relation.relationship_type === "father"
     ) {
-      return;
+      if (
+        peopleMap.has(a) &&
+        peopleMap.has(b)
+      ) {
+        fatherOf.set(a, b);
+
+        if (!childrenOf.has(b)) {
+          childrenOf.set(b, []);
+        }
+
+        childrenOf.get(b).push(a);
+      }
     }
 
-    /*
-     * الأب:
-     * person_id هو الابن
-     * related_person_id هو الأب
-     */
     if (
-      relationship.relationship_type ===
-      "father"
+      relation.relationship_type === "child"
     ) {
-      parents.get(a)?.add(b);
-      children.get(b)?.add(a);
-    }
+      if (
+        peopleMap.has(a) &&
+        peopleMap.has(b)
+      ) {
+        fatherOf.set(b, a);
 
-    /*
-     * علاقة child:
-     * person_id هو الأب
-     * related_person_id هو الابن
-     */
-    if (
-      relationship.relationship_type ===
-      "child"
-    ) {
-      children.get(a)?.add(b);
-      parents.get(b)?.add(a);
+        if (!childrenOf.has(a)) {
+          childrenOf.set(a, []);
+        }
+
+        if (
+          !childrenOf
+            .get(a)
+            .includes(b)
+        ) {
+          childrenOf
+            .get(a)
+            .push(b);
+        }
+      }
     }
   });
 
   /*
-   * حساب مستوى كل شخص.
-   *
-   * الشخص الذي لا يملك أبًا ظاهرًا
-   * يبدأ من المستوى 0.
-   *
-   * الأب يكون دائمًا فوق الابن.
+   * حساب الجيل.
+   * الجذر = 0
+   * الابن = الأب + 1
    */
+
   const generation = new Map();
 
-  function calculateGeneration(
+  function getGeneration(
     personId,
     visiting = new Set()
   ) {
@@ -200,75 +194,156 @@ function buildGraph(people, relationships) {
 
     visiting.add(personId);
 
-    const personParents = [
-      ...(parents.get(personId) || []),
-    ];
+    const fatherId =
+      fatherOf.get(personId);
 
-    if (!personParents.length) {
+    if (
+      !fatherId ||
+      !peopleMap.has(fatherId)
+    ) {
       generation.set(personId, 0);
       return 0;
     }
 
-    const parentGenerations =
-      personParents.map((parentId) =>
-        calculateGeneration(
-          parentId,
-          new Set(visiting)
-        )
-      );
-
-    const result =
-      Math.max(...parentGenerations) + 1;
+    const level =
+      getGeneration(
+        fatherId,
+        new Set(visiting)
+      ) + 1;
 
     generation.set(
       personId,
-      result
+      level
     );
 
-    return result;
+    return level;
   }
 
-  visiblePeople.forEach((person) => {
-    calculateGeneration(person.id);
+  males.forEach((person) => {
+    getGeneration(person.id);
   });
 
-  const generationGroups = new Map();
+  /*
+   * تجميع الأشخاص حسب الجيل.
+   */
 
-  visiblePeople.forEach((person) => {
+  const generations = new Map();
+
+  males.forEach((person) => {
     const level =
       generation.get(person.id) || 0;
 
-    if (!generationGroups.has(level)) {
-      generationGroups.set(level, []);
+    if (!generations.has(level)) {
+      generations.set(level, []);
     }
 
-    generationGroups
+    generations
       .get(level)
       .push(person);
   });
 
-  const sortedGenerations = [
-    ...generationGroups.entries(),
-  ].sort((a, b) => a[0] - b[0]);
+  const sortedLevels = [
+    ...generations.keys(),
+  ].sort((a, b) => a - b);
+
+  /*
+   * ترتيب الأبناء تحت آبائهم قدر الإمكان.
+   *
+   * هذا يجعل الشجرة مقروءة بصريًا
+   * بدل ترتيب الأشخاص أبجديًا فقط.
+   */
+
+  const orderedLevels = [];
+
+  sortedLevels.forEach((level) => {
+    const current =
+      generations.get(level) || [];
+
+    if (level === 0) {
+      orderedLevels.push({
+        level,
+        people: current,
+      });
+
+      return;
+    }
+
+    const previous =
+      orderedLevels[
+        orderedLevels.length - 1
+      ]?.people || [];
+
+    const previousIndex = new Map(
+      previous.map((person, index) => [
+        person.id,
+        index,
+      ])
+    );
+
+    const sorted = [...current].sort(
+      (a, b) => {
+        const fatherA =
+          fatherOf.get(a.id);
+
+        const fatherB =
+          fatherOf.get(b.id);
+
+        const indexA =
+          previousIndex.has(fatherA)
+            ? previousIndex.get(fatherA)
+            : 999999;
+
+        const indexB =
+          previousIndex.has(fatherB)
+            ? previousIndex.get(fatherB)
+            : 999999;
+
+        if (indexA !== indexB) {
+          return indexA - indexB;
+        }
+
+        return getFirstName(a).localeCompare(
+          getFirstName(b),
+          "ar"
+        );
+      }
+    );
+
+    orderedLevels.push({
+      level,
+      people: sorted,
+    });
+  });
+
+  /*
+   * أبعاد العقد.
+   */
+
+  const NODE_WIDTH = 150;
+  const NODE_HEIGHT = 88;
+
+  const HORIZONTAL_GAP = 70;
+  const VERTICAL_GAP = 150;
+
+  /*
+   * تحديد X لكل شخص.
+   */
 
   const nodes = [];
+  const nodeMap = new Map();
 
-  const NODE_WIDTH = 180;
-  const HORIZONTAL_GAP = 55;
-  const VERTICAL_GAP = 185;
-
-  sortedGenerations.forEach(
-    ([level, generationPeople]) => {
+  orderedLevels.forEach(
+    ({ level, people: levelPeople }) => {
       const totalWidth =
-        generationPeople.length *
+        levelPeople.length *
           NODE_WIDTH +
         Math.max(
-          generationPeople.length - 1,
+          levelPeople.length - 1,
           0
         ) *
           HORIZONTAL_GAP;
 
-      generationPeople.forEach(
+      levelPeople.forEach(
         (person, index) => {
           const x =
             -totalWidth / 2 +
@@ -280,20 +355,52 @@ function buildGraph(people, relationships) {
           const y =
             level * VERTICAL_GAP;
 
-          nodes.push({
+          const node = {
             ...person,
             x,
             y,
             generation: level,
-          });
+          };
+
+          nodes.push(node);
+          nodeMap.set(person.id, node);
         }
       );
     }
   );
 
+  /*
+   * خطوط الأب -> الأبناء.
+   *
+   * نرجع بيانات الخطوط فقط،
+   * والرسم الحقيقي يتم في SVG.
+   */
+
+  const familyConnections = [];
+
+  fatherOf.forEach(
+    (fatherId, childId) => {
+      const father =
+        nodeMap.get(fatherId);
+
+      const child =
+        nodeMap.get(childId);
+
+      if (!father || !child) {
+        return;
+      }
+
+      familyConnections.push({
+        id: `${fatherId}-${childId}`,
+        father,
+        child,
+      });
+    }
+  );
+
   return {
     nodes,
-    relationships,
+    familyConnections,
   };
 }
 
@@ -338,7 +445,7 @@ export default function TreeClient({
     account?.person?.id;
 
   /* =======================================================
-     تحميل الشجرة
+     LOAD
   ======================================================= */
 
   useEffect(() => {
@@ -402,6 +509,10 @@ export default function TreeClient({
     };
   }, []);
 
+  /* =======================================================
+     GRAPH
+  ======================================================= */
+
   const graph = useMemo(() => {
     return buildGraph(
       people,
@@ -411,10 +522,6 @@ export default function TreeClient({
     people,
     relationships,
   ]);
-
-  /* =======================================================
-     خريطة الأشخاص
-  ======================================================= */
 
   const peopleMap = useMemo(() => {
     return new Map(
@@ -426,11 +533,7 @@ export default function TreeClient({
   }, [people]);
 
   /* =======================================================
-     البحث
-
-     البحث يشمل جميع أفراد العائلة،
-     وليس الذكور فقط، حتى نستطيع الوصول
-     إلى المرأة من البحث عند الحاجة.
+     SEARCH
   ======================================================= */
 
   const filteredPeople = useMemo(() => {
@@ -451,7 +554,7 @@ export default function TreeClient({
   }, [people, search]);
 
   /* =======================================================
-     العلاقات الخاصة بالشخص المحدد
+     SELECTED PERSON RELATIONS
   ======================================================= */
 
   const selectedRelations =
@@ -472,12 +575,12 @@ export default function TreeClient({
       const children = [];
 
       relationships.forEach(
-        (relationship) => {
+        (relation) => {
           const {
             person_id,
             related_person_id,
             relationship_type,
-          } = relationship;
+          } = relation;
 
           if (
             relationship_type ===
@@ -533,67 +636,55 @@ export default function TreeClient({
         }
       );
 
-      /*
-       * بعض البيانات قد تكون محفوظة
-       * بالاتجاه المعاكس، لذلك نبحث
-       * أيضًا من جهة related_person_id.
-       */
-
       relationships.forEach(
-        (relationship) => {
-          const {
-            person_id,
-            related_person_id,
-            relationship_type,
-          } = relationship;
-
+        (relation) => {
           if (
-            related_person_id !==
+            relation.related_person_id !==
             selectedPerson.id
           ) {
             return;
           }
 
           if (
-            relationship_type ===
+            relation.relationship_type ===
               "father" &&
             !father
           ) {
             father =
               peopleMap.get(
-                person_id
+                relation.person_id
               ) || null;
           }
 
           if (
-            relationship_type ===
+            relation.relationship_type ===
               "mother" &&
             !mother
           ) {
             mother =
               peopleMap.get(
-                person_id
+                relation.person_id
               ) || null;
           }
 
           if (
-            relationship_type ===
+            relation.relationship_type ===
               "spouse" &&
             !spouse
           ) {
             spouse =
               peopleMap.get(
-                person_id
+                relation.person_id
               ) || null;
           }
 
           if (
-            relationship_type ===
-              "child"
+            relation.relationship_type ===
+            "child"
           ) {
             const child =
               peopleMap.get(
-                person_id
+                relation.person_id
               );
 
             if (
@@ -609,31 +700,22 @@ export default function TreeClient({
         }
       );
 
-      /*
-       * لو كانت العلاقة محفوظة father:
-       * person_id = الابن
-       * related_person_id = الأب
-       *
-       * الأبناء يمكن أيضًا استنتاجهم
-       * من علاقات father.
-       */
-
       relationships.forEach(
-        (relationship) => {
+        (relation) => {
           if (
-            relationship.relationship_type !==
+            relation.relationship_type !==
             "father"
           ) {
             return;
           }
 
           if (
-            relationship.related_person_id ===
+            relation.related_person_id ===
             selectedPerson.id
           ) {
             const child =
               peopleMap.get(
-                relationship.person_id
+                relation.person_id
               );
 
             if (
@@ -662,7 +744,7 @@ export default function TreeClient({
     ]);
 
   /* =======================================================
-     التحكم
+     CONTROLS
   ======================================================= */
 
   function resetView() {
@@ -773,10 +855,6 @@ export default function TreeClient({
     }
   }
 
-  /* =======================================================
-     علاقة الشخص بالحساب الحالي
-  ======================================================= */
-
   function getRelationshipLabel(
     personId
   ) {
@@ -828,53 +906,12 @@ export default function TreeClient({
     return null;
   }
 
-  /* =======================================================
-     خطوط العلاقات
-
-     لا نرسم إلا الذكور الموجودين
-     في الشجرة.
-  ======================================================= */
-
-  const nodeMap = new Map(
-    graph.nodes.map((node) => [
-      node.id,
-      node,
-    ])
-  );
-
-  const svgRelationships =
-    relationships
-      .filter((relationship) => {
-        return (
-          relationship.relationship_type ===
-            "father" ||
-          relationship.relationship_type ===
-            "child"
-        );
-      })
-      .map((relationship) => {
-        const from = nodeMap.get(
-          relationship.person_id
-        );
-
-        const to = nodeMap.get(
-          relationship.related_person_id
-        );
-
-        if (!from || !to) {
-          return null;
-        }
-
-        return {
-          ...relationship,
-          from,
-          to,
-        };
-      })
-      .filter(Boolean);
-
   return (
     <main className="tree-page">
+
+      {/* ===================================================
+          HEADER
+      =================================================== */}
 
       <header className="tree-header">
 
@@ -961,6 +998,10 @@ export default function TreeClient({
 
       </header>
 
+      {/* ===================================================
+          TOOLBAR
+      =================================================== */}
+
       <div className="tree-toolbar">
 
         <div className="tree-info">
@@ -1008,6 +1049,10 @@ export default function TreeClient({
         </div>
 
       </div>
+
+      {/* ===================================================
+          TREE VIEWPORT
+      =================================================== */}
 
       <section
         className="tree-viewport"
@@ -1093,6 +1138,10 @@ export default function TreeClient({
               }}
             >
 
+              {/* =================================================
+                  FAMILY LINES
+              ================================================= */}
+
               <svg
                 className="tree-lines"
                 width="1"
@@ -1101,60 +1150,35 @@ export default function TreeClient({
                 preserveAspectRatio="xMidYMin meet"
               >
 
-                {svgRelationships.map(
-                  (relationship) => {
+                {graph.familyConnections.map(
+                  (connection) => {
                     const {
-                      from,
-                      to,
-                    } = relationship;
+                      father,
+                      child,
+                    } = connection;
 
-                    /*
-                     * العلاقة الأب -> الابن.
-                     *
-                     * في بعض الصفوف قد تكون
-                     * العلاقة محفوظة بالاتجاه
-                     * المعاكس، لذلك نحدد الأعلى
-                     * والأسفل اعتمادًا على y.
-                     */
+                    const fatherBottom =
+                      father.y + 88;
 
-                    const top =
-                      from.y <= to.y
-                        ? from
-                        : to;
-
-                    const bottom =
-                      from.y <= to.y
-                        ? to
-                        : from;
-
-                    const startX =
-                      top.x;
-
-                    const startY =
-                      top.y + 112;
-
-                    const endX =
-                      bottom.x;
-
-                    const endY =
-                      bottom.y;
+                    const childTop =
+                      child.y;
 
                     const middleY =
-                      startY +
-                      (endY -
-                        startY) /
+                      fatherBottom +
+                      (childTop -
+                        fatherBottom) /
                         2;
 
                     return (
                       <path
                         key={
-                          relationship.id
+                          connection.id
                         }
                         d={`
-                          M ${startX} ${startY}
-                          C ${startX} ${middleY},
-                            ${endX} ${middleY},
-                            ${endX} ${endY}
+                          M ${father.x} ${fatherBottom}
+                          L ${father.x} ${middleY}
+                          L ${child.x} ${middleY}
+                          L ${child.x} ${childTop}
                         `}
                         className="family-line"
                       />
@@ -1164,6 +1188,10 @@ export default function TreeClient({
 
               </svg>
 
+              {/* =================================================
+                  NODES
+              ================================================= */}
+
               <div className="tree-nodes">
 
                 {graph.nodes.map(
@@ -1172,7 +1200,7 @@ export default function TreeClient({
                       person.id ===
                       currentPersonId;
 
-                    const relationshipLabel =
+                    const relation =
                       getRelationshipLabel(
                         person.id
                       );
@@ -1199,9 +1227,7 @@ export default function TreeClient({
                           )`,
                           top: `${person.y}px`,
                         }}
-                        onClick={(
-                          event
-                        ) => {
+                        onClick={(event) => {
                           event.stopPropagation();
 
                           selectPerson(
@@ -1237,15 +1263,13 @@ export default function TreeClient({
                             )}
                           </strong>
 
-                          {relationshipLabel && (
+                          {relation && (
                             <span className="node-relation">
-                              {
-                                relationshipLabel
-                              }
+                              {relation}
                             </span>
                           )}
 
-                          {!relationshipLabel &&
+                          {!relation &&
                             isCurrent && (
                             <span className="node-relation">
                               أنت
@@ -1267,7 +1291,7 @@ export default function TreeClient({
       </section>
 
       {/* =====================================================
-          معلومات الشخص
+          PERSON PANEL
       ===================================================== */}
 
       {selectedPerson && (
@@ -1276,9 +1300,7 @@ export default function TreeClient({
           <button
             className="person-panel-close"
             onClick={() =>
-              setSelectedPerson(
-                null
-              )
+              setSelectedPerson(null)
             }
             aria-label="إغلاق"
           >
@@ -1413,7 +1435,7 @@ export default function TreeClient({
           </div>
 
           {/* =================================================
-              العلاقات العائلية
+              FAMILY RELATIONS
           ================================================= */}
 
           <div className="person-relations">
