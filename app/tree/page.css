@@ -302,14 +302,6 @@
   width: 3000px;
   height: 2200px;
   transform-origin: top center;
-
-  /*
-   * مهم:
-   * لا يوجد transition هنا.
-   * لأن canvas يتحرك مع pointer movement
-   * والـ transition هو سبب الإحساس بالتأخير
-   * والاهتزاز أثناء السحب.
-   */
   will-change: transform;
 }
 
@@ -324,16 +316,10 @@
   pointer-events: none;
 }
 
-.family-line,
-.spouse-line {
+.family-line {
   fill: none;
   stroke: #cbbba3;
   stroke-width: 2;
-}
-
-.spouse-line {
-  stroke: #ad9776;
-  stroke-dasharray: 5 5;
 }
 
 .tree-nodes {
@@ -380,7 +366,6 @@
 
 .family-tree-node:hover {
   border-color: rgba(140, 119, 91, 0.35);
-
   background: #fff;
 
   box-shadow:
@@ -452,18 +437,17 @@
 
 .node-content strong {
   display: block;
-
   overflow: hidden;
 
   color: #252525;
 
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 800;
 
   line-height: 1.65;
 
   text-overflow: ellipsis;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .node-relation {
@@ -475,7 +459,6 @@
   border-radius: 20px;
 
   background: #f5efe7;
-
   color: #967a56;
 
   font-size: 8px;
@@ -686,7 +669,8 @@
 }
 
 .person-details span,
-.person-bio > span {
+.person-bio > span,
+.person-relations-title {
   display: block;
 
   margin-bottom: 5px;
@@ -711,6 +695,114 @@
   text-align: right;
   font-family: Arial, sans-serif;
 }
+
+/* =========================================================
+   FAMILY RELATIONS
+========================================================= */
+
+.person-relations {
+  margin-top: 18px;
+  padding: 14px;
+
+  border-radius: 13px;
+
+  background: #faf8f5;
+}
+
+.person-relations-title {
+  color: #a58a67;
+  font-weight: 800;
+}
+
+.person-relation-item {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  margin-top: 8px;
+  padding: 10px 11px;
+
+  border: 1px solid #eee8df;
+  border-radius: 10px;
+
+  background: #fff;
+  color: #444;
+
+  text-align: right;
+}
+
+.person-relation-item:hover {
+  background: #f8f4ee;
+  border-color: #d9ccb9;
+}
+
+.person-relation-item span {
+  flex-shrink: 0;
+
+  color: #a0a0a0;
+  font-size: 9px;
+}
+
+.person-relation-item strong {
+  overflow: hidden;
+
+  color: #444;
+  font-size: 10px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-children {
+  margin-top: 12px;
+}
+
+.person-children > span {
+  display: block;
+
+  margin-bottom: 7px;
+
+  color: #a0a0a0;
+  font-size: 9px;
+}
+
+.person-children > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.person-children button {
+  padding: 9px 10px;
+
+  border: 1px solid #eee8df;
+  border-radius: 9px;
+
+  background: #fff;
+  color: #555;
+
+  font-size: 10px;
+  text-align: right;
+}
+
+.person-children button:hover {
+  background: #f8f4ee;
+  border-color: #d9ccb9;
+}
+
+.no-relations {
+  margin: 8px 0 0;
+
+  color: #999;
+  font-size: 10px;
+}
+
+/* =========================================================
+   BIO
+========================================================= */
 
 .person-bio {
   margin-top: 18px;
