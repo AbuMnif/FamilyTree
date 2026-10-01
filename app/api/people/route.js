@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { supabase } from "../../../../lib/supabase";
-import { getCurrentAccount } from "../../../../lib/auth";
+import { supabase } from "../../../lib/supabase";
+import { getCurrentAccount } from "../../../lib/auth";
 
 export async function GET() {
   try {
